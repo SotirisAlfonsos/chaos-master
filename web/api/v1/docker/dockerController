@@ -1,0 +1,14 @@
+package docker
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func StartDocker(w http.ResponseWriter, r *http.Request) {
+	fmt.Print("Starting docker")
+}
+
+func StopDocker(w http.ResponseWriter, r *http.Request) {
+	fmt.Print("Stopping docker")
+}

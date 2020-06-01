@@ -1,0 +1,3 @@
+api_specs:
+  port: 8090
+  scheme: http
