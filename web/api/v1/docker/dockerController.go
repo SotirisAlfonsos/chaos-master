@@ -1,22 +1,64 @@
 package docker
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
+	"github.com/SotirisAlfonsos/chaos-slave/proto"
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/gorilla/mux"
 )
 
-func StartDockerWithName(w http.ResponseWriter, r *http.Request) {
+type DController struct {
+	DockerClients map[string]proto.DockerClient
+	Logger        log.Logger
+}
+
+func (d *DController) StartDockerWithName(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	name := vars["name"]
-	fmt.Println("Starting docker with name " + name)
+
+	_ = level.Info(d.Logger).Log("msg", fmt.Sprintf("Starting docker with name %s", name))
+
+	for slave, cli := range d.DockerClients {
+		statusResponse, err := cli.Start(context.Background(), &proto.DockerRequest{
+			Name:                 name,
+			XXX_NoUnkeyedLiteral: struct{}{},
+			XXX_unrecognized:     nil,
+			XXX_sizecache:        0,
+		})
+		if err != nil {
+			_ = level.Error(d.Logger).Log("msg", fmt.Sprintf("Error response from slave %s,", slave), "err", err)
+		}
+
+		_ = level.Info(d.Logger).Log("msg",
+			fmt.Sprintf("Response from slave %s, %s, %s", slave, statusResponse.Message, statusResponse.Status))
+	}
 }
 
-func StopDockerWithName(w http.ResponseWriter, r *http.Request) {
-	fmt.Print("Stopping docker")
+func (d *DController) StopDockerWithName(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	name := vars["name"]
+	_ = level.Info(d.Logger).Log("msg", fmt.Sprintf("Stopping docker with name %s", name))
+
+	for slave, cli := range d.DockerClients {
+		statusResponse, err := cli.Stop(context.Background(), &proto.DockerRequest{
+			Name:                 name,
+			XXX_NoUnkeyedLiteral: struct{}{},
+			XXX_unrecognized:     nil,
+			XXX_sizecache:        0,
+		})
+		if err != nil {
+			_ = level.Error(d.Logger).Log("msg", fmt.Sprintf("Error response from slave %s,", slave), "err", err)
+		}
+
+		_ = level.Info(d.Logger).Log("msg",
+			fmt.Sprintf("Response from slave %s, %s, %s", slave, statusResponse.Message, statusResponse.Status))
+	}
 }
 
-func StopAnyDocker(w http.ResponseWriter, r *http.Request) {
-	fmt.Print("Stopping any docker")
+func (d *DController) StopAnyDocker(w http.ResponseWriter, r *http.Request) {
+	_ = level.Info(d.Logger).Log("msg", "Stopping any docker")
 }

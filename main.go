@@ -6,6 +6,7 @@ import (
 
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/config"
+	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/go-kit/kit/log"
 )
 
@@ -18,7 +19,9 @@ func main() {
 
 	conf := config.GetConfig(*configFile, logger)
 
-	conf.APIConfig.RunAPIController(logger)
+	clientConnections := network.GetClientConnections(conf.ChaosSlaves, logger)
+
+	conf.APIConfig.RunAPIController(clientConnections, logger)
 }
 
 func createLogger(debugLevel string) log.Logger {

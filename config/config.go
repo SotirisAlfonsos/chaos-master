@@ -11,8 +11,8 @@ import (
 )
 
 type Config struct {
-	APIConfig *api.RestAPI `yaml:"api_specs"`
-	Slaves    *[]string    `yaml:"scan_date,omitempty"`
+	APIConfig   *api.RestAPI `yaml:"api_config"`
+	ChaosSlaves []string     `yaml:"chaos_slaves,flow"`
 }
 
 func GetConfig(file string, logger log.Logger) Config {
@@ -38,7 +38,7 @@ func unmarshalConfFromFile(file string, logger log.Logger) Config {
 			os.Exit(1)
 		}
 
-		if err = yaml.Unmarshal(yamlFile, config); err != nil {
+		if err = yaml.Unmarshal(yamlFile, &config); err != nil {
 			_ = level.Error(logger).Log("msg", "could not unmarshal yml", "err", err)
 
 			os.Exit(1)
