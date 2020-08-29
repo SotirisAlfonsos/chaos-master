@@ -17,11 +17,13 @@ service Strategy {
 }
 
 message ServiceRequest {
-    string name = 1;
+    string jobName = 1;
+    string name = 2;
 }
 
 message DockerRequest {
-    string name = 1;
+    string jobName = 1;
+    string name = 2;
 }
 
 message RecoverRequest {

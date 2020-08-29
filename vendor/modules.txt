@@ -1,4 +1,4 @@
-# github.com/SotirisAlfonsos/chaos-slave v0.0.0-20200602183829-4c7eae73d03b
+# github.com/SotirisAlfonsos/chaos-slave v0.0.0-20200606230330-b9ec8b66c4a0
 github.com/SotirisAlfonsos/chaos-slave/proto
 # github.com/go-kit/kit v0.10.0
 github.com/go-kit/kit/log
@@ -15,7 +15,9 @@ github.com/golang/protobuf/ptypes/timestamp
 github.com/gorilla/mux
 # github.com/pkg/errors v0.9.1
 github.com/pkg/errors
-# golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7
+# github.com/robfig/cron/v3 v3.0.1
+github.com/robfig/cron/v3
+# golang.org/x/net v0.0.0-20200226121028-0de0cce0169b
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack

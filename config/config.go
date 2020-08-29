@@ -4,6 +4,8 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/SotirisAlfonsos/chaos-master/network"
+
 	api "github.com/SotirisAlfonsos/chaos-master/web/api/v1"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -11,8 +13,9 @@ import (
 )
 
 type Config struct {
-	APIConfig   *api.RestAPI `yaml:"api_config"`
-	ChaosSlaves []string     `yaml:"chaos_slaves,flow"`
+	APIConfig         *api.RestAPI          `yaml:"api_config"`
+	ChaosSlaves       []*network.ChaosSlave `yaml:"chaos_slaves,flow"`
+	HealthCheckReport bool                  `yaml:"health_check_report,flow"`
 }
 
 func GetConfig(file string, logger log.Logger) Config {
@@ -25,7 +28,8 @@ func unmarshalConfFromFile(file string, logger log.Logger) Config {
 		Scheme: "http",
 	}
 	DefaultConfig := Config{
-		APIConfig: DefaultRestAPI,
+		APIConfig:         DefaultRestAPI,
+		HealthCheckReport: false,
 	}
 
 	config := DefaultConfig

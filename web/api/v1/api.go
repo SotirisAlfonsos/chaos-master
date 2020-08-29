@@ -32,15 +32,16 @@ func (restAPI *RestAPI) RunAPIController(clientConnections *network.Clients, log
 func getRouter(clientConnections *network.Clients, base string, scheme string, logger log.Logger) *mux.Router {
 	router := mux.NewRouter()
 
-	serviceControllerRouter(router, clientConnections, base, logger)
-	dockerControllerRouter(router, clientConnections, base, logger)
+	jobRouter := router.PathPrefix(base + "/job/{jobName}").Subrouter()
+	serviceControllerRouter(jobRouter, clientConnections, base, logger)
+	dockerControllerRouter(jobRouter, clientConnections, base, logger)
 	router.Schemes(scheme)
 
 	return router
 }
 
 func serviceControllerRouter(router *mux.Router, clientConnections *network.Clients, base string, logger log.Logger) {
-	sController := &service.SController{ServiceClients: clientConnections.Service, Logger: logger}
+	sController := &service.SController{ServiceClientConnections: clientConnections.Service, Logger: logger}
 	serviceRouter := router.PathPrefix(base + "/service").Subrouter()
 	serviceRouter.HandleFunc("/{name}/start", sController.StartService).Methods("POST")
 	serviceRouter.HandleFunc("/{name}/stop", sController.StopService).Methods("POST")

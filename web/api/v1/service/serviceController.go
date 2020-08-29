@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/SotirisAlfonsos/chaos-slave/proto"
+	"github.com/SotirisAlfonsos/chaos-master/network"
+
 	"github.com/go-kit/kit/log"
 )
 
 type SController struct {
-	ServiceClients []proto.ServiceClient
-	Logger         log.Logger
+	ServiceClientConnections map[string][]network.ServiceClientConnection
+	Logger                   log.Logger
 }
 
 func (s *SController) StartService(w http.ResponseWriter, r *http.Request) {

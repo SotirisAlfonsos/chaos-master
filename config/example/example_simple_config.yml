@@ -2,4 +2,22 @@ api_config:
   port: 8090
   scheme: http
 
-chaos_slaves: ['127.0.0.1:8081']
+chaos_slaves:
+  - job_name: "zookeeper"
+    instance: "Docker"
+    component_name: "my_zoo"
+    targets: ['127.0.0.1:8081']
+  - job_name: "zookeeper"
+    instance: "Service"
+    component_name: "my_zoo"
+    targets: ['127.0.0.1:8082', '127.0.0.1:8081']
+  - job_name: "zookeeper"
+    instance: "Service"
+    component_name: "my_zoo"
+    targets: ['127.0.0.1:8082', '127.0.0.1:8081']
+  - job_name: "zookeeper_service"
+    instance: "Service"
+    component_name: "my_zoo"
+    targets: ['127.0.0.1:8082']
+
+#health_check_report: true
