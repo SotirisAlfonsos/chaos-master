@@ -30,7 +30,7 @@ func main() {
 	healthChecker := healthcheck.Register(clientConnections.Health, logger)
 	healthChecker.Start(conf.HealthCheckReport)
 
-	conf.APIConfig.RunAPIController(clientConnections, logger)
+	conf.APIConfig.RunAPIController(clientConnections, healthChecker, logger)
 }
 
 func createLogger(debugLevel string) log.Logger {
@@ -48,7 +48,7 @@ func showRegisteredJobs(clientConnections *network.Clients, logger log.Logger) {
 }
 
 func showDockerJobs(dockerJobs map[string][]network.DockerClientConnection, logger log.Logger) {
-	var jobList []string
+	jobList := make([]string, 0)
 	for job := range dockerJobs {
 		jobList = append(jobList, job)
 	}
@@ -57,7 +57,7 @@ func showDockerJobs(dockerJobs map[string][]network.DockerClientConnection, logg
 }
 
 func showServiceJobs(serviceJobs map[string][]network.ServiceClientConnection, logger log.Logger) {
-	var jobList []string
+	jobList := make([]string, 0)
 	for job := range serviceJobs {
 		jobList = append(jobList, job)
 	}

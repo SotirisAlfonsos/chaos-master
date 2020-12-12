@@ -4,6 +4,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/status"
+
+	"github.com/SotirisAlfonsos/chaos-master/healthcheck"
+
 	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/docker"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/service"
@@ -17,10 +21,14 @@ type RestAPI struct {
 	Scheme string `yaml:"scheme"`
 }
 
-func (restAPI *RestAPI) RunAPIController(clientConnections *network.Clients, logger log.Logger) {
+func (restAPI *RestAPI) RunAPIController(clientConnections *network.Clients,
+	healthChecker *healthcheck.HealthChecker, logger log.Logger) {
 	base := "/chaos/api/v1"
 
-	router := getRouter(clientConnections, base, restAPI.Scheme, logger)
+	router := mux.NewRouter()
+	setSlaveRouters(clientConnections, router, base, logger)
+	setStatusRouter(healthChecker, router, base, logger)
+	router.Schemes(restAPI.Scheme)
 	server := getServer(router, restAPI.Port)
 
 	_ = level.Info(logger).Log("msg", "starting web server on port "+restAPI.Port)
@@ -29,15 +37,16 @@ func (restAPI *RestAPI) RunAPIController(clientConnections *network.Clients, log
 	}
 }
 
-func getRouter(clientConnections *network.Clients, base string, scheme string, logger log.Logger) *mux.Router {
-	router := mux.NewRouter()
-
+func setSlaveRouters(clientConnections *network.Clients, router *mux.Router, base string, logger log.Logger) {
 	jobRouter := router.PathPrefix(base + "/job/{jobName}").Subrouter()
 	serviceControllerRouter(jobRouter, clientConnections, base, logger)
 	dockerControllerRouter(jobRouter, clientConnections, base, logger)
-	router.Schemes(scheme)
+}
 
-	return router
+func setStatusRouter(healthChecker *healthcheck.HealthChecker, router *mux.Router, base string, logger log.Logger) {
+	statusController := &status.Slaves{StatusMap: healthChecker.DetailsMap, Logger: logger}
+	serviceRouter := router.PathPrefix(base + "/master").Subrouter()
+	serviceRouter.HandleFunc("/status", statusController.Status).Methods("GET")
 }
 
 func serviceControllerRouter(router *mux.Router, clientConnections *network.Clients, base string, logger log.Logger) {
