@@ -1,5 +1,7 @@
 # github.com/SotirisAlfonsos/chaos-slave v0.0.0-20201212195121-4f5757bea03c
 github.com/SotirisAlfonsos/chaos-slave/proto
+# github.com/davecgh/go-spew v1.1.1
+github.com/davecgh/go-spew/spew
 # github.com/go-kit/kit v0.10.0
 github.com/go-kit/kit/log
 github.com/go-kit/kit/log/level
@@ -15,8 +17,12 @@ github.com/golang/protobuf/ptypes/timestamp
 github.com/gorilla/mux
 # github.com/pkg/errors v0.9.1
 github.com/pkg/errors
+# github.com/pmezard/go-difflib v1.0.0
+github.com/pmezard/go-difflib/difflib
 # github.com/robfig/cron/v3 v3.0.1
 github.com/robfig/cron/v3
+# github.com/stretchr/testify v1.6.1
+github.com/stretchr/testify/assert
 # golang.org/x/net v0.0.0-20201209123823-ac852fbbde11
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
@@ -110,3 +116,5 @@ google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/timestamppb
 # gopkg.in/yaml.v2 v2.4.0
 gopkg.in/yaml.v2
+# gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
+gopkg.in/yaml.v3

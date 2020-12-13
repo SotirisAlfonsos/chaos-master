@@ -50,7 +50,7 @@ func setStatusRouter(healthChecker *healthcheck.HealthChecker, router *mux.Route
 }
 
 func serviceControllerRouter(router *mux.Router, clientConnections *network.Clients, base string, logger log.Logger) {
-	sController := &service.SController{ServiceClientConnections: clientConnections.Service, Logger: logger}
+	sController := &service.SController{ServiceClients: clientConnections.Service, Logger: logger}
 	serviceRouter := router.PathPrefix(base + "/service").Subrouter()
 	serviceRouter.HandleFunc("/{name}/start", sController.StartService).Methods("POST")
 	serviceRouter.HandleFunc("/{name}/stop", sController.StopService).Methods("POST")

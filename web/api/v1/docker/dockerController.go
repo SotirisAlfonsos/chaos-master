@@ -20,7 +20,6 @@ type DController struct {
 }
 
 func (d *DController) StartDockerWithName(w http.ResponseWriter, r *http.Request) {
-	_ = level.Info(d.Logger).Log("msg", "Start docker controller")
 	vars := mux.Vars(r)
 	jobName := vars["jobName"]
 	name := vars["name"]
@@ -47,6 +46,7 @@ func (d *DController) StopDockerWithName(w http.ResponseWriter, r *http.Request)
 	vars := mux.Vars(r)
 	jobName := vars["jobName"]
 	name := vars["name"]
+
 	_ = level.Info(d.Logger).Log("msg", fmt.Sprintf("Stopping docker with name %s", name))
 
 	if clients, ok := d.DockerClients[jobName]; ok {
