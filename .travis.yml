@@ -5,4 +5,6 @@ go:
 
 go_import_path: chaos-master
 
-script: go test ./... -v -short
+script:
+  - go test ./... -v -short -coverprofile=coverage.txt -covermode=atomic
+  - bash <(curl -s https://codecov.io/bash)
