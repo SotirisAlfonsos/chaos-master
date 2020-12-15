@@ -9,7 +9,7 @@ chaos_slaves:
     targets: ['127.0.0.1:8081']
   - job_name: "zookeeper"
     instance: "Service"
-    component_name: "my_zoo"
+    component_name: "simple"
     targets: ['127.0.0.1:8082', '127.0.0.1:8081']
   - job_name: "zookeeper"
     instance: "Service"

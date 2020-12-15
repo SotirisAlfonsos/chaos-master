@@ -1,7 +1,10 @@
 package v1
 
 import (
+	"context"
 	"net/http"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/status"
@@ -32,14 +35,31 @@ func (restAPI *RestAPI) RunAPIController(clientConnections *network.Clients,
 	server := getServer(router, restAPI.Port)
 
 	_ = level.Info(logger).Log("msg", "starting web server on port "+restAPI.Port)
-	if err := server.ListenAndServe(); err != nil {
-		_ = level.Error(logger).Log("msg", "Can not start web server", "err", err)
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			_ = level.Error(logger).Log("msg", "Can not start web server", "err", err)
+		}
+	}()
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+
+	<-c
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15)
+	defer cancel()
+
+	err := server.Shutdown(ctx)
+	if err != nil {
+		_ = level.Info(logger).Log("msg", "Gracefully shutting down server")
 	}
+	os.Exit(0)
 }
 
 func setSlaveRouters(clientConnections *network.Clients, router *mux.Router, base string, logger log.Logger) {
 	jobRouter := router.PathPrefix(base + "/job/{jobName}").Subrouter()
-	serviceControllerRouter(jobRouter, clientConnections, base, logger)
+	serviceControllerRouter(router.PathPrefix(base).Subrouter(), clientConnections, base, logger)
 	dockerControllerRouter(jobRouter, clientConnections, base, logger)
 }
 
@@ -51,9 +71,9 @@ func setStatusRouter(healthChecker *healthcheck.HealthChecker, router *mux.Route
 
 func serviceControllerRouter(router *mux.Router, clientConnections *network.Clients, base string, logger log.Logger) {
 	sController := &service.SController{ServiceClients: clientConnections.Service, Logger: logger}
-	serviceRouter := router.PathPrefix(base + "/service").Subrouter()
-	serviceRouter.HandleFunc("/{name}/start", sController.StartService).Methods("POST")
-	serviceRouter.HandleFunc("/{name}/stop", sController.StopService).Methods("POST")
+	router.HandleFunc("/service", sController.ServiceAction).
+		Queries("action", "{start}{stop}").
+		Methods("POST")
 }
 
 func dockerControllerRouter(router *mux.Router, clientConnections *network.Clients, base string, logger log.Logger) {
@@ -67,7 +87,7 @@ func dockerControllerRouter(router *mux.Router, clientConnections *network.Clien
 func getServer(router http.Handler, port string) *http.Server {
 	server := &http.Server{
 		Handler:      router,
-		Addr:         "127.0.0.1:" + port,
+		Addr:         ":" + port,
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}

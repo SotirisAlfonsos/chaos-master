@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -59,10 +60,15 @@ func TestStartServiceSuccess(t *testing.T) {
 	server := httpTestServer(serviceClients)
 	defer server.Close()
 
-	response := servicePostCall(t, server, jobName, target, serviceName, "start")
+	details := newDetails(jobName, target, serviceName)
+
+	response, err := servicePostCall(server, details, "start")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, 200, response.Status)
-	assert.Equal(t, fmt.Sprintf("Response from target <%s>, <>, <SUCCESS>", target), response.Message)
+	assert.Equal(t, fmt.Sprintf("Response from target {%s}, {}, {SUCCESS}", target), response.Message)
 	assert.Equal(t, "", response.Error)
 }
 
@@ -80,14 +86,19 @@ func TestStopServiceSuccess(t *testing.T) {
 	server := httpTestServer(serviceClients)
 	defer server.Close()
 
-	response := servicePostCall(t, server, jobName, target, serviceName, "stop")
+	details := newDetails(jobName, target, serviceName)
+
+	response, err := servicePostCall(server, details, "stop")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, 200, response.Status)
-	assert.Equal(t, fmt.Sprintf("Response from target <%s>, <>, <SUCCESS>", target), response.Message)
+	assert.Equal(t, fmt.Sprintf("Response from target {%s}, {}, {SUCCESS}", target), response.Message)
 	assert.Equal(t, "", response.Error)
 }
 
-func TestStartServiceNameDoesNotExist(t *testing.T) {
+func TestStartServiceOneOfJobServiceTargetNotExist(t *testing.T) {
 	var jobName = "jobName"
 	var serviceName = "serviceName"
 	var serviceToStart = "different name"
@@ -99,17 +110,23 @@ func TestStartServiceNameDoesNotExist(t *testing.T) {
 	server := httpTestServer(serviceClients)
 	defer server.Close()
 
-	responseStart := servicePostCall(t, server, jobName, target, serviceToStart, "start")
+	details := newDetails(jobName, target, serviceToStart)
+
+	responseStart, err := servicePostCall(server, details, "start")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Service <%s> does not exist on target <%s>", serviceToStart, target), responseStart.Message)
-	assert.Equal(t, "", responseStart.Error)
+	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", serviceToStart, target), responseStart.Error)
 
-	responseStop := servicePostCall(t, server, jobName, target, serviceToStart, "stop")
+	responseStop, err := servicePostCall(server, details, "stop")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, 400, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Service <%s> does not exist on target <%s>", serviceToStart, target), responseStop.Message)
-	assert.Equal(t, "", responseStop.Error)
+	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", serviceToStart, target), responseStop.Error)
 }
 
 func TestStartStopServiceTargetDoesNotExist(t *testing.T) {
@@ -124,17 +141,23 @@ func TestStartStopServiceTargetDoesNotExist(t *testing.T) {
 	server := httpTestServer(serviceClients)
 	defer server.Close()
 
-	responseStart := servicePostCall(t, server, jobName, targetToStart, serviceName, "start")
+	details := newDetails(jobName, targetToStart, serviceName)
+
+	responseStart, err := servicePostCall(server, details, "start")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Service <%s> does not exist on target <%s>", serviceName, targetToStart), responseStart.Message)
-	assert.Equal(t, "", responseStart.Error)
+	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", serviceName, targetToStart), responseStart.Error)
 
-	responseStop := servicePostCall(t, server, jobName, targetToStart, serviceName, "stop")
+	responseStop, err := servicePostCall(server, details, "stop")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, 400, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Service <%s> does not exist on target <%s>", serviceName, targetToStart), responseStop.Message)
-	assert.Equal(t, "", responseStop.Error)
+	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", serviceName, targetToStart), responseStop.Error)
 }
 
 func TestStartStopServiceJobDoesNotExist(t *testing.T) {
@@ -149,17 +172,23 @@ func TestStartStopServiceJobDoesNotExist(t *testing.T) {
 	server := httpTestServer(serviceClients)
 	defer server.Close()
 
-	responseStart := servicePostCall(t, server, jobToStart, target, serviceName, "start")
+	details := newDetails(jobToStart, target, serviceName)
+
+	responseStart, err := servicePostCall(server, details, "start")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Could not find job <%s>", jobToStart), responseStart.Message)
-	assert.Equal(t, "", responseStart.Error)
+	assert.Equal(t, fmt.Sprintf("Could not find job {%s}", jobToStart), responseStart.Error)
 
-	responseStop := servicePostCall(t, server, jobToStart, target, serviceName, "stop")
+	responseStop, err := servicePostCall(server, details, "stop")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, 400, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Could not find job <%s>", jobToStart), responseStop.Message)
-	assert.Equal(t, "", responseStop.Error)
+	assert.Equal(t, fmt.Sprintf("Could not find job {%s}", jobToStart), responseStop.Error)
 }
 
 func TestStartStopServiceWithFailureResponseFromSlave(t *testing.T) {
@@ -173,17 +202,23 @@ func TestStartStopServiceWithFailureResponseFromSlave(t *testing.T) {
 	server := httpTestServer(serviceClients)
 	defer server.Close()
 
-	responseStart := servicePostCall(t, server, jobName, target, serviceName, "start")
+	details := newDetails(jobName, target, serviceName)
+
+	responseStart, err := servicePostCall(server, details, "start")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, 500, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Failure response from target <%s>", target), responseStart.Message)
-	assert.Equal(t, "", responseStart.Error)
+	assert.Equal(t, fmt.Sprintf("Failure response from target {%s}", target), responseStart.Error)
 
-	responseStop := servicePostCall(t, server, jobName, target, serviceName, "stop")
+	responseStop, err := servicePostCall(server, details, "stop")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, 500, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Failure response from target <%s>", target), responseStop.Message)
-	assert.Equal(t, "", responseStop.Error)
+	assert.Equal(t, fmt.Sprintf("Failure response from target {%s}", target), responseStop.Error)
 }
 
 func TestStartStopServiceWithErrorResponseFromSlave(t *testing.T) {
@@ -198,17 +233,45 @@ func TestStartStopServiceWithErrorResponseFromSlave(t *testing.T) {
 	server := httpTestServer(serviceClients)
 	defer server.Close()
 
-	responseStart := servicePostCall(t, server, jobName, target, serviceName, "start")
+	details := newDetails(jobName, target, serviceName)
+
+	responseStart, err := servicePostCall(server, details, "start")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, 500, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Error response from target <%s>", target), responseStart.Message)
-	assert.Equal(t, errorMessage, responseStart.Error)
+	assert.Equal(t, fmt.Sprintf("Error response from target {%s}: %s", target, errorMessage), responseStart.Error)
 
-	responseStop := servicePostCall(t, server, jobName, target, serviceName, "stop")
+	responseStop, err := servicePostCall(server, details, "stop")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, 500, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Error response from target <%s>", target), responseStop.Message)
-	assert.Equal(t, errorMessage, responseStop.Error)
+	assert.Equal(t, fmt.Sprintf("Error response from target {%s}: %s", target, errorMessage), responseStop.Error)
+}
+
+func TestServiceWithInvalidAction(t *testing.T) {
+	var jobName = "jobName"
+	var serviceName = "serviceName"
+	var target = "target"
+
+	serviceClientConnection := withSuccessServiceConnection(serviceName, target)
+
+	serviceClients := setClients(jobName, serviceClientConnection)
+	server := httpTestServer(serviceClients)
+	defer server.Close()
+
+	details := newDetails(jobName, target, serviceName)
+
+	responseStart, err := servicePostCall(server, details, "invalidAction")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, 400, responseStart.Status)
+	assert.Equal(t, fmt.Sprintf("The action {%s} is not supported", "invalidAction"), responseStart.Error)
 }
 
 func withSuccessServiceConnection(service string, target string) *network.ServiceClientConnection {
@@ -239,20 +302,34 @@ func withErrorServiceConnection(service string, target string, errorMessage stri
 	}
 }
 
-func servicePostCall(t *testing.T, server *httptest.Server, jobName string, target string, serviceName string, action string) *Response {
-	url := server.URL + "/job/" + jobName + "/target/" + target + "/service/" + serviceName + "/" + action
-	resp, err := http.Post(url, "", nil) //nolint:gosec
+func newDetails(jobName string, target string, serviceName string) *Details {
+	return &Details{
+		Job:     jobName,
+		Service: serviceName,
+		Target:  target,
+	}
+}
+
+func servicePostCall(server *httptest.Server, details *Details, action string) (*Response, error) {
+	requestBody, _ := json.Marshal(details)
+	url := server.URL + "/service?action=" + action
+
+	return post(requestBody, url)
+}
+
+func post(requestBody []byte, url string) (*Response, error) {
+	resp, err := http.Post(url, "", bytes.NewReader(requestBody)) //nolint:gosec
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	response := &Response{}
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
-		t.Fatal(err)
+		return &Response{Status: resp.StatusCode}, err
 	}
-	return response
+	return response, nil
 }
 
 func setClients(jobName string, serviceClientConnections ...*network.ServiceClientConnection) map[string][]network.ServiceClientConnection {
@@ -271,8 +348,9 @@ func httpTestServer(serviceClients map[string][]network.ServiceClientConnection)
 	}
 
 	router := mux.NewRouter()
-	router.HandleFunc("/job/{jobName}/target/{target}/service/{name}/start", sController.StartService)
-	router.HandleFunc("/job/{jobName}/target/{target}/service/{name}/stop", sController.StopService)
+	router.HandleFunc("/service", sController.ServiceAction).
+		Queries("action", "{action}").
+		Methods("POST")
 	return httptest.NewServer(router)
 }
 
