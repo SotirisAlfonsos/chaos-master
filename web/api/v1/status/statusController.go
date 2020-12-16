@@ -19,6 +19,7 @@ type Slaves struct {
 func (slaves *Slaves) Status(w http.ResponseWriter, r *http.Request) {
 	var sb strings.Builder
 
+	sb.WriteString(fmt.Sprintln("Slaves status:"))
 	for slaveHost, slaveDetails := range slaves.StatusMap {
 		sb.WriteString(fmt.Sprintln(slaveHost, slaveDetails.Status.String()))
 	}

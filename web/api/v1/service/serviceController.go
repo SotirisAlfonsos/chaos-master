@@ -21,6 +21,28 @@ type SController struct {
 	Logger         log.Logger
 }
 
+type action int
+
+const (
+	stop action = iota
+	start
+	notImplemented
+)
+
+func (a action) String() string {
+	return [...]string{"stop", "start"}[a]
+}
+
+func toActionEnum(value string) (action, error) {
+	switch value {
+	case start.String():
+		return start, nil
+	case stop.String():
+		return stop, nil
+	}
+	return notImplemented, errors.New(fmt.Sprintf("The action {%s} is not supported", value))
+}
+
 type Response struct {
 	Message string `json:"message"`
 	Error   string `json:"error,"`
@@ -62,9 +84,9 @@ func (s *SController) ServiceAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	action := r.URL.Query().Get("action")
-	if action != "start" && action != "stop" {
-		response.badRequest(fmt.Sprintf("The action {%s} is not supported", action), s.Logger)
+	action, err := toActionEnum(r.FormValue("action"))
+	if err != nil {
+		response.badRequest(err.Error(), s.Logger)
 		setResponseInWriter(w, response, s.Logger)
 		return
 	}
@@ -92,15 +114,15 @@ func (s *SController) ServiceAction(w http.ResponseWriter, r *http.Request) {
 	setResponseInWriter(w, response, s.Logger)
 }
 
-func (s *SController) performAction(action string, serviceConnection *network.ServiceClientConnection,
+func (s *SController) performAction(action action, serviceConnection *network.ServiceClientConnection,
 	serviceRequest *proto.ServiceRequest, details *Details, response *Response) {
 	var statusResponse *proto.StatusResponse
 	var err error
 
-	switch {
-	case action == "start":
+	switch action {
+	case start:
 		statusResponse, err = serviceConnection.Client.Start(context.Background(), serviceRequest)
-	case action == "stop":
+	case stop:
 		statusResponse, err = serviceConnection.Client.Stop(context.Background(), serviceRequest)
 	default:
 		response.badRequest(fmt.Sprintf("Action {%s} not allowed", action), s.Logger)

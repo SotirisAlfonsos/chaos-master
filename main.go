@@ -30,7 +30,8 @@ func main() {
 	healthChecker := healthcheck.Register(clientConnections.Health, logger)
 	healthChecker.Start(conf.HealthCheckReport)
 
-	conf.APIConfig.RunAPIController(clientConnections, healthChecker, logger)
+	restAPI := conf.APIOptions.NewRestAPI(clientConnections, healthChecker, logger)
+	restAPI.RunAPIController()
 }
 
 func createLogger(debugLevel string) log.Logger {

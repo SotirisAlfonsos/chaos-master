@@ -13,7 +13,7 @@ import (
 )
 
 type Config struct {
-	APIConfig         *api.RestAPI          `yaml:"api_config"`
+	APIOptions        *api.RestAPIOptions   `yaml:"api_options"`
 	ChaosSlaves       []*network.ChaosSlave `yaml:"chaos_slaves,flow"`
 	HealthCheckReport bool                  `yaml:"health_check_report,flow"`
 }
@@ -23,12 +23,12 @@ func GetConfig(file string, logger log.Logger) Config {
 }
 
 func unmarshalConfFromFile(file string, logger log.Logger) Config {
-	DefaultRestAPI := &api.RestAPI{
+	DefaultRestAPI := &api.RestAPIOptions{
 		Port:   "8080",
 		Scheme: "http",
 	}
 	DefaultConfig := Config{
-		APIConfig:         DefaultRestAPI,
+		APIOptions:        DefaultRestAPI,
 		HealthCheckReport: false,
 	}
 

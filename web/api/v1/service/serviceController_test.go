@@ -12,17 +12,12 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/SotirisAlfonsos/chaos-master/network"
-
-	"google.golang.org/grpc"
-
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
-
+	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/SotirisAlfonsos/chaos-slave/proto"
-
 	"github.com/go-kit/kit/log"
+	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -98,11 +93,12 @@ func TestStopServiceSuccess(t *testing.T) {
 	assert.Equal(t, "", response.Error)
 }
 
-func TestStartServiceOneOfJobServiceTargetNotExist(t *testing.T) {
+func TestStartServiceOneOfServiceNameOrTargetNotExist(t *testing.T) {
 	var jobName = "jobName"
 	var serviceName = "serviceName"
-	var serviceToStart = "different name"
+	var differentServiceName = "different name"
 	var target = "target"
+	var differentTarget = "different target"
 
 	serviceClientConnection := withSuccessServiceConnection(serviceName, target)
 
@@ -110,7 +106,7 @@ func TestStartServiceOneOfJobServiceTargetNotExist(t *testing.T) {
 	server := httpTestServer(serviceClients)
 	defer server.Close()
 
-	details := newDetails(jobName, target, serviceToStart)
+	details := newDetails(jobName, target, differentServiceName)
 
 	responseStart, err := servicePostCall(server, details, "start")
 	if err != nil {
@@ -118,7 +114,9 @@ func TestStartServiceOneOfJobServiceTargetNotExist(t *testing.T) {
 	}
 
 	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", serviceToStart, target), responseStart.Error)
+	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", differentServiceName, target), responseStart.Error)
+
+	details = newDetails(jobName, differentTarget, serviceName)
 
 	responseStop, err := servicePostCall(server, details, "stop")
 	if err != nil {
@@ -126,38 +124,7 @@ func TestStartServiceOneOfJobServiceTargetNotExist(t *testing.T) {
 	}
 
 	assert.Equal(t, 400, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", serviceToStart, target), responseStop.Error)
-}
-
-func TestStartStopServiceTargetDoesNotExist(t *testing.T) {
-	var jobName = "jobName"
-	var serviceName = "serviceName"
-	var targetToStart = "different target"
-	var target = "target"
-
-	serviceClientConnection := withSuccessServiceConnection(serviceName, target)
-
-	serviceClients := setClients(jobName, serviceClientConnection)
-	server := httpTestServer(serviceClients)
-	defer server.Close()
-
-	details := newDetails(jobName, targetToStart, serviceName)
-
-	responseStart, err := servicePostCall(server, details, "start")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", serviceName, targetToStart), responseStart.Error)
-
-	responseStop, err := servicePostCall(server, details, "stop")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, 400, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", serviceName, targetToStart), responseStop.Error)
+	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", serviceName, differentTarget), responseStop.Error)
 }
 
 func TestStartStopServiceJobDoesNotExist(t *testing.T) {
