@@ -3,6 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+
+	v1 "github.com/SotirisAlfonsos/chaos-master/web/api/v1"
 
 	"github.com/go-kit/kit/log/level"
 
@@ -22,15 +25,21 @@ func main() {
 
 	logger := createLogger(*debugLevel)
 
-	conf := config.GetConfig(*configFile, logger)
+	conf, err := config.GetConfig(*configFile)
+	if err != nil {
+		_ = level.Error(logger).Log("err", err)
+		os.Exit(1)
+	}
 
-	clientConnections := network.GetConnectionsFromSlaveList(conf.ChaosSlaves, logger)
-	showRegisteredJobs(clientConnections, logger)
+	connections := network.GetConnectionPool(conf.JobsFromConfig, logger)
+	jobMap := conf.GetJobMap(logger)
+	showRegisteredJobs(jobMap, logger)
 
-	healthChecker := healthcheck.Register(clientConnections.Health, logger)
+	healthChecker := healthcheck.Register(connections, logger)
 	healthChecker.Start(conf.HealthCheckReport)
 
-	restAPI := conf.APIOptions.NewRestAPI(clientConnections, healthChecker, logger)
+	options := v1.NewAPIOptions(conf.APIOptions, jobMap, connections)
+	restAPI := v1.NewRestAPI(options, healthChecker, logger)
 	restAPI.RunAPIController()
 }
 
@@ -43,25 +52,9 @@ func createLogger(debugLevel string) log.Logger {
 	return chaoslogger.New(allowLevel)
 }
 
-func showRegisteredJobs(clientConnections *network.Clients, logger log.Logger) {
-	showDockerJobs(clientConnections.Docker, logger)
-	showServiceJobs(clientConnections.Service, logger)
-}
-
-func showDockerJobs(dockerJobs map[string][]network.DockerClientConnection, logger log.Logger) {
-	jobList := make([]string, 0)
-	for job := range dockerJobs {
-		jobList = append(jobList, job)
+func showRegisteredJobs(jobsMap map[string]*config.Job, logger log.Logger) {
+	for jobName, job := range jobsMap {
+		_ = level.Info(logger).Log("msg", fmt.Sprintf("{%s} job registered for component {%s} type {%s} and targets %v",
+			jobName, job.ComponentName, job.FailureType, job.Target))
 	}
-
-	_ = level.Info(logger).Log("msg", fmt.Sprintf("docker jobs registered %v", jobList))
-}
-
-func showServiceJobs(serviceJobs map[string][]network.ServiceClientConnection, logger log.Logger) {
-	jobList := make([]string, 0)
-	for job := range serviceJobs {
-		jobList = append(jobList, job)
-	}
-
-	_ = level.Info(logger).Log("msg", fmt.Sprintf("service jobs registered %v", jobList))
 }

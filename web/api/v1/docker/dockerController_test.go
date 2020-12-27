@@ -10,12 +10,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gorilla/mux"
+	"github.com/SotirisAlfonsos/chaos-master/config"
 
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
-	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/SotirisAlfonsos/chaos-slave/proto"
 	"github.com/go-kit/kit/log"
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )
@@ -46,13 +46,14 @@ func TestStartDockerSuccess(t *testing.T) {
 	var containerName = "containerName"
 	var target = "target"
 
-	sConn1 := withSuccessDockerConnection(containerName, target)
-	sConn2 := withSuccessDockerConnection("wrong name", "wrong target")
-	sConn3 := withFailureDockerConnection(containerName, "wrong target")
-	sConn4 := withErrorDockerConnection("wrong name", target, "error message")
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	dockerClients := setClients(jobName, sConn1, sConn2, sConn3, sConn4)
-	server := httpTestServer(dockerClients)
+	connectionPool[target] = withSuccessDockerConnection()
+	connectionPool["wrong target"] = withFailureDockerConnection()
+
+	jobMap[jobName] = newJob(containerName, target, "wrong target")
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobName, target, containerName)
@@ -72,13 +73,14 @@ func TestStopDockerSuccess(t *testing.T) {
 	var dockerName = "dockerName"
 	var target = "target"
 
-	sConn1 := withFailureDockerConnection("wrong name", target)
-	sConn2 := withErrorDockerConnection(dockerName, "wrong target", "error message")
-	sConn3 := withSuccessDockerConnection("wrong name", "wrong target")
-	sConn4 := withSuccessDockerConnection(dockerName, target)
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	dockerClients := setClients(jobName, sConn1, sConn2, sConn3, sConn4)
-	server := httpTestServer(dockerClients)
+	connectionPool[target] = withSuccessDockerConnection()
+	connectionPool["wrong target"] = withErrorDockerConnection("error message")
+	jobMap[jobName] = newJob(dockerName, target, "wrong target")
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobName, target, dockerName)
@@ -93,17 +95,20 @@ func TestStopDockerSuccess(t *testing.T) {
 	assert.Equal(t, "", response.Error)
 }
 
-func TestStartDockerOneOfJobDockerTargetNotExist(t *testing.T) {
+func TestStartDockerOneOfContainerNameTargetNotExist(t *testing.T) {
 	var jobName = "jobName"
 	var dockerName = "dockerName"
 	var dockerToStart = "different name"
 	var target = "target"
 	var differentTarget = "different target"
 
-	dockerClientConnection := withSuccessDockerConnection(dockerName, target)
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	dockerClients := setClients(jobName, dockerClientConnection)
-	server := httpTestServer(dockerClients)
+	connectionPool[target] = withSuccessDockerConnection()
+	jobMap[jobName] = newJob(dockerName, target)
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobName, target, dockerToStart)
@@ -133,10 +138,13 @@ func TestStartStopDockerJobDoesNotExist(t *testing.T) {
 	var jobToStart = "different target"
 	var target = "target"
 
-	dockerClientConnection := withSuccessDockerConnection(dockerName, target)
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	dockerClients := setClients(jobName, dockerClientConnection)
-	server := httpTestServer(dockerClients)
+	connectionPool[target] = withSuccessDockerConnection()
+	jobMap[jobName] = newJob(dockerName, target)
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobToStart, target, dockerName)
@@ -163,10 +171,13 @@ func TestStartStopDockerWithFailureResponseFromSlave(t *testing.T) {
 	var dockerName = "dockerName"
 	var target = "target"
 
-	dockerClientConnection := withFailureDockerConnection(dockerName, target)
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	dockerClients := setClients(jobName, dockerClientConnection)
-	server := httpTestServer(dockerClients)
+	connectionPool[target] = withFailureDockerConnection()
+	jobMap[jobName] = newJob(dockerName, target)
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobName, target, dockerName)
@@ -194,10 +205,13 @@ func TestStartStopDockerWithErrorResponseFromSlave(t *testing.T) {
 	var target = "target"
 	var errorMessage = "error message"
 
-	dockerClientConnection := withErrorDockerConnection(dockerName, target, errorMessage)
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	dockerClients := setClients(jobName, dockerClientConnection)
-	server := httpTestServer(dockerClients)
+	connectionPool[target] = withErrorDockerConnection(errorMessage)
+	jobMap[jobName] = newJob(dockerName, target)
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobName, target, dockerName)
@@ -224,10 +238,13 @@ func TestDockerWithInvalidAction(t *testing.T) {
 	var dockerName = "dockerName"
 	var target = "target"
 
-	dockerClientConnection := withSuccessDockerConnection(dockerName, target)
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	dockerClients := setClients(jobName, dockerClientConnection)
-	server := httpTestServer(dockerClients)
+	connectionPool[target] = withSuccessDockerConnection()
+	jobMap[jobName] = newJob(dockerName, target)
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobName, target, dockerName)
@@ -245,10 +262,13 @@ func TestRandomDockerWithInvalidAction(t *testing.T) {
 	var jobName = "jobName"
 	var dockerName = "dockerName"
 
-	dockerClientConnection := withSuccessDockerConnection(dockerName, "target")
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	dockerClients := setClients(jobName, dockerClientConnection)
-	server := httpTestServer(dockerClients)
+	connectionPool["target"] = withSuccessDockerConnection()
+	jobMap[jobName] = newJob(dockerName, "target")
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetailsNoTarget(jobName, dockerName)
@@ -268,10 +288,13 @@ func TestStartStopRandomDockerOneOfJobOrDockerNameNotExist(t *testing.T) {
 	var dockerName = "dockerName"
 	var dockerToStart = "different name"
 
-	dockerClientConnection := withSuccessDockerConnection(dockerName, "target")
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	dockerClients := setClients(jobName, dockerClientConnection)
-	server := httpTestServer(dockerClients)
+	connectionPool["target"] = withSuccessDockerConnection()
+	jobMap[jobName] = newJob(dockerName, "target")
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetailsNoTarget(jobName, dockerToStart)
@@ -295,31 +318,28 @@ func TestStartStopRandomDockerOneOfJobOrDockerNameNotExist(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("Could not find job {%s}", differentJobName), responseStop.Error)
 }
 
-func withSuccessDockerConnection(container string, target string) *network.DockerClientConnection {
-	return &network.DockerClientConnection{
-		Name:   container,
-		Target: target,
-		Client: GetMockDockerClient(new(proto.StatusResponse), nil),
+func withSuccessDockerConnection() *connection {
+	return &connection{
+		grpcConn:     nil,
+		dockerClient: GetMockDockerClient(new(proto.StatusResponse), nil),
 	}
 }
 
-func withFailureDockerConnection(container string, target string) *network.DockerClientConnection {
+func withFailureDockerConnection() *connection {
 	statusResponse := new(proto.StatusResponse)
 	statusResponse.Status = proto.StatusResponse_FAIL
-	return &network.DockerClientConnection{
-		Name:   container,
-		Target: target,
-		Client: GetMockDockerClient(statusResponse, nil),
+	return &connection{
+		grpcConn:     nil,
+		dockerClient: GetMockDockerClient(statusResponse, nil),
 	}
 }
 
-func withErrorDockerConnection(container string, target string, errorMessage string) *network.DockerClientConnection {
+func withErrorDockerConnection(errorMessage string) *connection {
 	statusResponse := new(proto.StatusResponse)
 	statusResponse.Status = proto.StatusResponse_FAIL
-	return &network.DockerClientConnection{
-		Name:   container,
-		Target: target,
-		Client: GetMockDockerClient(statusResponse, errors.New(errorMessage)),
+	return &connection{
+		grpcConn:     nil,
+		dockerClient: GetMockDockerClient(statusResponse, errors.New(errorMessage)),
 	}
 }
 
@@ -367,23 +387,23 @@ func post(requestBody []byte, url string) (*Response, error) {
 	return response, nil
 }
 
-func setClients(jobName string, dockerClientConnections ...*network.DockerClientConnection) map[string][]network.DockerClientConnection {
-	dockerClients := make(map[string][]network.DockerClientConnection)
-	for _, dockerClientConnection := range dockerClientConnections {
-		dockerClients[jobName] = append(dockerClients[jobName], *dockerClientConnection)
+func newJob(componentName string, targets ...string) *config.Job {
+	return &config.Job{
+		ComponentName: componentName,
+		FailureType:   config.Service,
+		Target:        targets,
 	}
-
-	return dockerClients
 }
 
-func httpTestServer(dockerClients map[string][]network.DockerClientConnection) *httptest.Server {
-	sController := &DController{
-		DockerClients: dockerClients,
-		Logger:        logger,
+func httpTestServer(jobMap map[string]*config.Job, connectionPool map[string]*connection) *httptest.Server {
+	dController := &DController{
+		jobs:           jobMap,
+		connectionPool: connectionPool,
+		logger:         logger,
 	}
 
 	router := mux.NewRouter()
-	router.HandleFunc("/docker", sController.DockerAction).
+	router.HandleFunc("/docker", dController.DockerAction).
 		Queries("action", "{action}").
 		Methods("POST")
 	return httptest.NewServer(router)

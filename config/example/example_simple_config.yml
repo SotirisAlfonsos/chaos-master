@@ -2,21 +2,21 @@ api_options:
   port: 8090
   scheme: http
 
-chaos_slaves:
+jobs:
   - job_name: "zookeeper"
-    instance: "Docker"
+    type: "Docker"
     component_name: "my_zoo"
     targets: ['127.0.0.1:8081']
   - job_name: "zookeeper"
-    instance: "Service"
+    type: "Service"
     component_name: "simple"
     targets: ['127.0.0.1:8082', '127.0.0.1:8081']
   - job_name: "zookeeper docker"
-    instance: "Docker"
+    type: "Docker"
     component_name: "zookeeper"
     targets: ['127.0.0.1:8082', '127.0.0.1:8081']
   - job_name: "zookeeper_service"
-    instance: "Service"
+    type: "Service"
     component_name: "my_zoo"
     targets: ['127.0.0.1:8082']
 

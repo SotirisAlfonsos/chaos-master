@@ -20,16 +20,16 @@ type HealthChecker struct {
 }
 
 type Details struct {
-	Status                 proto.HealthCheckResponse_ServingStatus
-	healthClientConnection network.HealthClientConnection
+	Status           proto.HealthCheckResponse_ServingStatus
+	HealthClientConn proto.HealthClient
 }
 
-func Register(clientConnections map[string]network.HealthClientConnection, logger log.Logger) *HealthChecker {
+func Register(connections *network.Connections, logger log.Logger) *HealthChecker {
 	healthChecker := &HealthChecker{DetailsMap: make(map[string]*Details), logger: logger}
-	for target, healthClientConnection := range clientConnections {
+	for target, connection := range connections.Pool {
 		healthChecker.DetailsMap[target] = &Details{
-			Status:                 proto.HealthCheckResponse_UNKNOWN,
-			healthClientConnection: healthClientConnection,
+			Status:           proto.HealthCheckResponse_UNKNOWN,
+			HealthClientConn: proto.NewHealthClient(connection),
 		}
 	}
 
@@ -40,7 +40,7 @@ func (hch *HealthChecker) Start(report bool) {
 	c := cron.New()
 	id, err := c.AddFunc("@every 1m", func() {
 		for target, details := range hch.DetailsMap {
-			client := details.healthClientConnection.Client
+			client := details.HealthClientConn
 			resp, err := client.Check(context.Background(), &proto.HealthCheckRequest{})
 			if err != nil {
 				_ = level.Error(hch.logger).Log(

@@ -10,10 +10,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/SotirisAlfonsos/chaos-master/config"
+
 	"github.com/gorilla/mux"
 
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
-	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/SotirisAlfonsos/chaos-slave/proto"
 	"github.com/go-kit/kit/log"
 	"github.com/stretchr/testify/assert"
@@ -46,13 +47,14 @@ func TestStartServiceSuccess(t *testing.T) {
 	var serviceName = "serviceName"
 	var target = "target"
 
-	sConn1 := withSuccessServiceConnection(serviceName, target)
-	sConn2 := withSuccessServiceConnection("wrong name", "wrong target")
-	sConn3 := withFailureServiceConnection(serviceName, "wrong target")
-	sConn4 := withErrorServiceConnection("wrong name", target, "error message")
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	serviceClients := setClients(jobName, sConn1, sConn2, sConn3, sConn4)
-	server := httpTestServer(serviceClients)
+	connectionPool[target] = withSuccessServiceConnection()
+	connectionPool["wrong target"] = withFailureServiceConnection()
+
+	jobMap[jobName] = newJob(serviceName, target, "wrong target")
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobName, target, serviceName)
@@ -72,13 +74,14 @@ func TestStopServiceSuccess(t *testing.T) {
 	var serviceName = "serviceName"
 	var target = "target"
 
-	sConn1 := withFailureServiceConnection("wrong name", target)
-	sConn2 := withErrorServiceConnection(serviceName, "wrong target", "error message")
-	sConn3 := withSuccessServiceConnection("wrong name", "wrong target")
-	sConn4 := withSuccessServiceConnection(serviceName, target)
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	serviceClients := setClients(jobName, sConn1, sConn2, sConn3, sConn4)
-	server := httpTestServer(serviceClients)
+	connectionPool[target] = withSuccessServiceConnection()
+	connectionPool["wrong target"] = withErrorServiceConnection("error message")
+	jobMap[jobName] = newJob(serviceName, target, "wrong target")
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobName, target, serviceName)
@@ -100,10 +103,13 @@ func TestStartServiceOneOfServiceNameOrTargetNotExist(t *testing.T) {
 	var target = "target"
 	var differentTarget = "different target"
 
-	serviceClientConnection := withSuccessServiceConnection(serviceName, target)
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	serviceClients := setClients(jobName, serviceClientConnection)
-	server := httpTestServer(serviceClients)
+	connectionPool[target] = withSuccessServiceConnection()
+	jobMap[jobName] = newJob(serviceName, target)
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobName, target, differentServiceName)
@@ -133,10 +139,13 @@ func TestStartStopServiceJobDoesNotExist(t *testing.T) {
 	var jobToStart = "different target"
 	var target = "target"
 
-	serviceClientConnection := withSuccessServiceConnection(serviceName, target)
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	serviceClients := setClients(jobName, serviceClientConnection)
-	server := httpTestServer(serviceClients)
+	connectionPool[target] = withSuccessServiceConnection()
+	jobMap[jobName] = newJob(serviceName, target)
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobToStart, target, serviceName)
@@ -163,10 +172,13 @@ func TestStartStopServiceWithFailureResponseFromSlave(t *testing.T) {
 	var serviceName = "serviceName"
 	var target = "target"
 
-	serviceClientConnection := withFailureServiceConnection(serviceName, target)
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	serviceClients := setClients(jobName, serviceClientConnection)
-	server := httpTestServer(serviceClients)
+	connectionPool[target] = withFailureServiceConnection()
+	jobMap[jobName] = newJob(serviceName, target)
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobName, target, serviceName)
@@ -194,10 +206,13 @@ func TestStartStopServiceWithErrorResponseFromSlave(t *testing.T) {
 	var target = "target"
 	var errorMessage = "error message"
 
-	serviceClientConnection := withErrorServiceConnection(serviceName, target, errorMessage)
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	serviceClients := setClients(jobName, serviceClientConnection)
-	server := httpTestServer(serviceClients)
+	connectionPool[target] = withErrorServiceConnection(errorMessage)
+	jobMap[jobName] = newJob(serviceName, target)
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobName, target, serviceName)
@@ -224,10 +239,13 @@ func TestServiceWithInvalidAction(t *testing.T) {
 	var serviceName = "serviceName"
 	var target = "target"
 
-	serviceClientConnection := withSuccessServiceConnection(serviceName, target)
+	jobMap := make(map[string]*config.Job)
+	connectionPool := make(map[string]*connection)
 
-	serviceClients := setClients(jobName, serviceClientConnection)
-	server := httpTestServer(serviceClients)
+	connectionPool[target] = withSuccessServiceConnection()
+	jobMap[jobName] = newJob(serviceName, target)
+
+	server := httpTestServer(jobMap, connectionPool)
 	defer server.Close()
 
 	details := newDetails(jobName, target, serviceName)
@@ -241,39 +259,36 @@ func TestServiceWithInvalidAction(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("The action {%s} is not supported", "invalidAction"), responseStart.Error)
 }
 
-func withSuccessServiceConnection(service string, target string) *network.ServiceClientConnection {
-	return &network.ServiceClientConnection{
-		Name:   service,
-		Target: target,
-		Client: GetMockServiceClient(new(proto.StatusResponse), nil),
+func withSuccessServiceConnection() *connection {
+	return &connection{
+		grpcConn:      nil,
+		serviceClient: GetMockServiceClient(new(proto.StatusResponse), nil),
 	}
 }
 
-func withFailureServiceConnection(service string, target string) *network.ServiceClientConnection {
+func withFailureServiceConnection() *connection {
 	statusResponse := new(proto.StatusResponse)
 	statusResponse.Status = proto.StatusResponse_FAIL
-	return &network.ServiceClientConnection{
-		Name:   service,
-		Target: target,
-		Client: GetMockServiceClient(statusResponse, nil),
+	return &connection{
+		grpcConn:      nil,
+		serviceClient: GetMockServiceClient(statusResponse, nil),
 	}
 }
 
-func withErrorServiceConnection(service string, target string, errorMessage string) *network.ServiceClientConnection {
+func withErrorServiceConnection(errorMessage string) *connection {
 	statusResponse := new(proto.StatusResponse)
 	statusResponse.Status = proto.StatusResponse_FAIL
-	return &network.ServiceClientConnection{
-		Name:   service,
-		Target: target,
-		Client: GetMockServiceClient(statusResponse, errors.New(errorMessage)),
+	return &connection{
+		grpcConn:      nil,
+		serviceClient: GetMockServiceClient(statusResponse, errors.New(errorMessage)),
 	}
 }
 
 func newDetails(jobName string, target string, serviceName string) *Details {
 	return &Details{
-		Job:     jobName,
-		Service: serviceName,
-		Target:  target,
+		Job:         jobName,
+		ServiceName: serviceName,
+		Target:      target,
 	}
 }
 
@@ -299,19 +314,19 @@ func post(requestBody []byte, url string) (*Response, error) {
 	return response, nil
 }
 
-func setClients(jobName string, serviceClientConnections ...*network.ServiceClientConnection) map[string][]network.ServiceClientConnection {
-	serviceClients := make(map[string][]network.ServiceClientConnection)
-	for _, serviceClientConnection := range serviceClientConnections {
-		serviceClients[jobName] = append(serviceClients[jobName], *serviceClientConnection)
+func newJob(componentName string, targets ...string) *config.Job {
+	return &config.Job{
+		ComponentName: componentName,
+		FailureType:   config.Service,
+		Target:        targets,
 	}
-
-	return serviceClients
 }
 
-func httpTestServer(serviceClients map[string][]network.ServiceClientConnection) *httptest.Server {
+func httpTestServer(jobMap map[string]*config.Job, connectionPool map[string]*connection) *httptest.Server {
 	sController := &SController{
-		ServiceClients: serviceClients,
-		Logger:         logger,
+		jobs:           jobMap,
+		connectionPool: connectionPool,
+		logger:         logger,
 	}
 
 	router := mux.NewRouter()

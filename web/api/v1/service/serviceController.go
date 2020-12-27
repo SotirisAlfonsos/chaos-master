@@ -7,18 +7,39 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/pkg/errors"
-
+	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/SotirisAlfonsos/chaos-slave/proto"
-	"github.com/go-kit/kit/log/level"
-
 	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 )
 
 type SController struct {
-	ServiceClients map[string][]network.ServiceClientConnection
-	Logger         log.Logger
+	jobs           map[string]*config.Job
+	connectionPool map[string]*connection
+	logger         log.Logger
+}
+
+type connection struct {
+	grpcConn      *grpc.ClientConn
+	serviceClient proto.ServiceClient
+}
+
+func NewServiceController(jobs map[string]*config.Job, connections *network.Connections, logger log.Logger) *SController {
+	connPool := make(map[string]*connection)
+	for target, grpcConn := range connections.Pool {
+		connPool[target] = &connection{
+			grpcConn:      grpcConn,
+			serviceClient: proto.NewServiceClient(grpcConn),
+		}
+	}
+	return &SController{
+		jobs:           jobs,
+		connectionPool: connPool,
+		logger:         logger,
+	}
 }
 
 type action int
@@ -50,9 +71,9 @@ type Response struct {
 }
 
 type Details struct {
-	Job     string `json:"job"`
-	Service string `json:"service"`
-	Target  string `json:"target"`
+	Job         string `json:"job"`
+	ServiceName string `json:"serviceName"`
+	Target      string `json:"target"`
 }
 
 func getDefaultResponse() *Response {
@@ -66,7 +87,7 @@ func getDefaultResponse() *Response {
 func newServiceRequest(details *Details) *proto.ServiceRequest {
 	return &proto.ServiceRequest{
 		JobName:              details.Job,
-		Name:                 details.Service,
+		Name:                 details.ServiceName,
 		XXX_NoUnkeyedLiteral: struct{}{},
 		XXX_unrecognized:     nil,
 		XXX_sizecache:        0,
@@ -79,65 +100,65 @@ func (s *SController) ServiceAction(w http.ResponseWriter, r *http.Request) {
 	details := &Details{}
 	err := json.NewDecoder(r.Body).Decode(&details)
 	if err != nil {
-		response.badRequest("Could not decode request body", s.Logger)
-		setResponseInWriter(w, response, s.Logger)
+		response.badRequest("Could not decode request body", s.logger)
+		setResponseInWriter(w, response, s.logger)
 		return
 	}
 
 	action, err := toActionEnum(r.FormValue("action"))
 	if err != nil {
-		response.badRequest(err.Error(), s.Logger)
-		setResponseInWriter(w, response, s.Logger)
+		response.badRequest(err.Error(), s.logger)
+		setResponseInWriter(w, response, s.logger)
 		return
 	}
 
 	serviceExists := false
 
-	_ = level.Info(s.Logger).Log("msg", fmt.Sprintf("%s service with name {%s}", action, details.Service))
+	_ = level.Info(s.logger).Log("msg", fmt.Sprintf("%s service with name {%s}", action, details.ServiceName))
 
-	if clients, ok := s.ServiceClients[details.Job]; ok {
-		for i := 0; i < len(clients) && !serviceExists; i++ {
-			if clients[i].Name == details.Service && clients[i].Target == details.Target {
+	if job, ok := s.jobs[details.Job]; ok {
+		for _, target := range job.Target {
+			if target == details.Target && job.ComponentName == details.ServiceName {
 				serviceRequest := newServiceRequest(details)
-				s.performAction(action, &clients[i], serviceRequest, details, response)
+				s.performAction(action, s.connectionPool[target].serviceClient, serviceRequest, details, response)
 				serviceExists = true
 			}
 		}
 
 		if !serviceExists {
-			response.badRequest(fmt.Sprintf("Service {%s} does not exist on target {%s}", details.Service, details.Target), s.Logger)
+			response.badRequest(fmt.Sprintf("Service {%s} does not exist on target {%s}", details.ServiceName, details.Target), s.logger)
 		}
 	} else {
-		response.badRequest(fmt.Sprintf("Could not find job {%s}", details.Job), s.Logger)
+		response.badRequest(fmt.Sprintf("Could not find job {%s}", details.Job), s.logger)
 	}
 
-	setResponseInWriter(w, response, s.Logger)
+	setResponseInWriter(w, response, s.logger)
 }
 
-func (s *SController) performAction(action action, serviceConnection *network.ServiceClientConnection,
+func (s *SController) performAction(action action, serviceClient proto.ServiceClient,
 	serviceRequest *proto.ServiceRequest, details *Details, response *Response) {
 	var statusResponse *proto.StatusResponse
 	var err error
 
 	switch action {
 	case start:
-		statusResponse, err = serviceConnection.Client.Start(context.Background(), serviceRequest)
+		statusResponse, err = serviceClient.Start(context.Background(), serviceRequest)
 	case stop:
-		statusResponse, err = serviceConnection.Client.Stop(context.Background(), serviceRequest)
+		statusResponse, err = serviceClient.Stop(context.Background(), serviceRequest)
 	default:
-		response.badRequest(fmt.Sprintf("Action {%s} not allowed", action), s.Logger)
+		response.badRequest(fmt.Sprintf("Action {%s} not allowed", action), s.logger)
 		return
 	}
 
 	switch {
 	case err != nil:
 		err = errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", details.Target))
-		response.internalServerError(err.Error(), s.Logger)
+		response.internalServerError(err.Error(), s.logger)
 	case statusResponse.Status != proto.StatusResponse_SUCCESS:
-		response.internalServerError(fmt.Sprintf("Failure response from target {%s}", details.Target), s.Logger)
+		response.internalServerError(fmt.Sprintf("Failure response from target {%s}", details.Target), s.logger)
 	default:
 		response.Message = fmt.Sprintf("Response from target {%s}, {%s}, {%s}", details.Target, statusResponse.Message, statusResponse.Status)
-		_ = level.Info(s.Logger).Log("msg", response.Message)
+		_ = level.Info(s.logger).Log("msg", response.Message)
 	}
 }
 

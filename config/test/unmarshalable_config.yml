@@ -1,0 +1,5 @@
+jobs:
+    job_name_wrong_tag: "zookeeper docker"
+    type: "Docker"
+    component_name: "my_zoo"
+    targets: ['127.0.0.1:8081']
