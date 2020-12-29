@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/SotirisAlfonsos/chaos-master/cache"
+
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/SotirisAlfonsos/chaos-slave/proto"
@@ -19,6 +21,7 @@ import (
 type SController struct {
 	jobs           map[string]*config.Job
 	connectionPool map[string]*connection
+	cacheManager   *cache.Manager
 	logger         log.Logger
 }
 
@@ -27,7 +30,8 @@ type connection struct {
 	serviceClient proto.ServiceClient
 }
 
-func NewServiceController(jobs map[string]*config.Job, connections *network.Connections, logger log.Logger) *SController {
+func NewServiceController(jobs map[string]*config.Job, connections *network.Connections,
+	cache *cache.Manager, logger log.Logger) *SController {
 	connPool := make(map[string]*connection)
 	for target, grpcConn := range connections.Pool {
 		connPool[target] = &connection{
@@ -38,6 +42,7 @@ func NewServiceController(jobs map[string]*config.Job, connections *network.Conn
 	return &SController{
 		jobs:           jobs,
 		connectionPool: connPool,
+		cacheManager:   cache,
 		logger:         logger,
 	}
 }
@@ -159,6 +164,25 @@ func (s *SController) performAction(action action, serviceClient proto.ServiceCl
 	default:
 		response.Message = fmt.Sprintf("Response from target {%s}, {%s}, {%s}", details.Target, statusResponse.Message, statusResponse.Status)
 		_ = level.Info(s.logger).Log("msg", response.Message)
+		if err = s.updateCache(serviceRequest, serviceClient, details.Target, action); err != nil {
+			_ = level.Error(s.logger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
+		}
+	}
+}
+
+func (s *SController) updateCache(serviceRequest *proto.ServiceRequest, serviceClient proto.ServiceClient, target string, action action) error {
+	uniqueName := fmt.Sprintf("%s %s %s", serviceRequest.JobName, serviceRequest.Name, target)
+	switch action {
+	case start:
+		s.cacheManager.Delete(uniqueName)
+		return nil
+	case stop:
+		recoveryFunc := func() (*proto.StatusResponse, error) {
+			return serviceClient.Start(context.Background(), serviceRequest)
+		}
+		return s.cacheManager.Register(uniqueName, recoveryFunc)
+	default:
+		return errors.New(fmt.Sprintf("Action %s not supported for cache operation", action))
 	}
 }
 

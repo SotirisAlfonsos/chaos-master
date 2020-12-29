@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/SotirisAlfonsos/chaos-master/cache"
+
 	"github.com/SotirisAlfonsos/chaos-master/config"
 
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
@@ -51,9 +53,11 @@ func TestStartDockerSuccess(t *testing.T) {
 
 	connectionPool[target] = withSuccessDockerConnection()
 	connectionPool["wrong target"] = withFailureDockerConnection()
-
 	jobMap[jobName] = newJob(containerName, target, "wrong target")
-	server := httpTestServer(jobMap, connectionPool)
+
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cacheManager)
 	defer server.Close()
 
 	details := newDetails(jobName, target, containerName)
@@ -66,6 +70,7 @@ func TestStartDockerSuccess(t *testing.T) {
 	assert.Equal(t, 200, response.Status)
 	assert.Equal(t, fmt.Sprintf("Response from target {%s}, {}, {SUCCESS}", target), response.Message)
 	assert.Equal(t, "", response.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestStopDockerSuccess(t *testing.T) {
@@ -80,7 +85,9 @@ func TestStopDockerSuccess(t *testing.T) {
 	connectionPool["wrong target"] = withErrorDockerConnection("error message")
 	jobMap[jobName] = newJob(dockerName, target, "wrong target")
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cacheManager)
 	defer server.Close()
 
 	details := newDetails(jobName, target, dockerName)
@@ -93,6 +100,7 @@ func TestStopDockerSuccess(t *testing.T) {
 	assert.Equal(t, 200, response.Status)
 	assert.Equal(t, fmt.Sprintf("Response from target {%s}, {}, {SUCCESS}", target), response.Message)
 	assert.Equal(t, "", response.Error)
+	assert.Equal(t, 1, cacheManager.ItemCount())
 }
 
 func TestStartDockerOneOfContainerNameTargetNotExist(t *testing.T) {
@@ -108,7 +116,9 @@ func TestStartDockerOneOfContainerNameTargetNotExist(t *testing.T) {
 	connectionPool[target] = withSuccessDockerConnection()
 	jobMap[jobName] = newJob(dockerName, target)
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cache.NewCacheManager(logger))
 	defer server.Close()
 
 	details := newDetails(jobName, target, dockerToStart)
@@ -120,6 +130,7 @@ func TestStartDockerOneOfContainerNameTargetNotExist(t *testing.T) {
 
 	assert.Equal(t, 400, responseStart.Status)
 	assert.Equal(t, fmt.Sprintf("Container {%s} does not exist on target {%s}", dockerToStart, target), responseStart.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 
 	details = newDetails(jobName, differentTarget, dockerName)
 
@@ -130,6 +141,7 @@ func TestStartDockerOneOfContainerNameTargetNotExist(t *testing.T) {
 
 	assert.Equal(t, 400, responseStop.Status)
 	assert.Equal(t, fmt.Sprintf("Container {%s} does not exist on target {%s}", dockerName, differentTarget), responseStop.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestStartStopDockerJobDoesNotExist(t *testing.T) {
@@ -144,7 +156,9 @@ func TestStartStopDockerJobDoesNotExist(t *testing.T) {
 	connectionPool[target] = withSuccessDockerConnection()
 	jobMap[jobName] = newJob(dockerName, target)
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cache.NewCacheManager(logger))
 	defer server.Close()
 
 	details := newDetails(jobToStart, target, dockerName)
@@ -156,6 +170,7 @@ func TestStartStopDockerJobDoesNotExist(t *testing.T) {
 
 	assert.Equal(t, 400, responseStart.Status)
 	assert.Equal(t, fmt.Sprintf("Could not find job {%s}", jobToStart), responseStart.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 
 	responseStop, err := dockerPostCall(server, details, "stop")
 	if err != nil {
@@ -164,6 +179,7 @@ func TestStartStopDockerJobDoesNotExist(t *testing.T) {
 
 	assert.Equal(t, 400, responseStop.Status)
 	assert.Equal(t, fmt.Sprintf("Could not find job {%s}", jobToStart), responseStop.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestStartStopDockerWithFailureResponseFromSlave(t *testing.T) {
@@ -177,7 +193,9 @@ func TestStartStopDockerWithFailureResponseFromSlave(t *testing.T) {
 	connectionPool[target] = withFailureDockerConnection()
 	jobMap[jobName] = newJob(dockerName, target)
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cache.NewCacheManager(logger))
 	defer server.Close()
 
 	details := newDetails(jobName, target, dockerName)
@@ -189,6 +207,7 @@ func TestStartStopDockerWithFailureResponseFromSlave(t *testing.T) {
 
 	assert.Equal(t, 500, responseStart.Status)
 	assert.Equal(t, fmt.Sprintf("Failure response from target {%s}", target), responseStart.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 
 	responseStop, err := dockerPostCall(server, details, "stop")
 	if err != nil {
@@ -197,6 +216,7 @@ func TestStartStopDockerWithFailureResponseFromSlave(t *testing.T) {
 
 	assert.Equal(t, 500, responseStop.Status)
 	assert.Equal(t, fmt.Sprintf("Failure response from target {%s}", target), responseStop.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestStartStopDockerWithErrorResponseFromSlave(t *testing.T) {
@@ -211,7 +231,9 @@ func TestStartStopDockerWithErrorResponseFromSlave(t *testing.T) {
 	connectionPool[target] = withErrorDockerConnection(errorMessage)
 	jobMap[jobName] = newJob(dockerName, target)
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cache.NewCacheManager(logger))
 	defer server.Close()
 
 	details := newDetails(jobName, target, dockerName)
@@ -223,6 +245,7 @@ func TestStartStopDockerWithErrorResponseFromSlave(t *testing.T) {
 
 	assert.Equal(t, 500, responseStart.Status)
 	assert.Equal(t, fmt.Sprintf("Error response from target {%s}: %s", target, errorMessage), responseStart.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 
 	responseStop, err := dockerPostCall(server, details, "stop")
 	if err != nil {
@@ -231,6 +254,7 @@ func TestStartStopDockerWithErrorResponseFromSlave(t *testing.T) {
 
 	assert.Equal(t, 500, responseStop.Status)
 	assert.Equal(t, fmt.Sprintf("Error response from target {%s}: %s", target, errorMessage), responseStop.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestDockerWithInvalidAction(t *testing.T) {
@@ -244,7 +268,9 @@ func TestDockerWithInvalidAction(t *testing.T) {
 	connectionPool[target] = withSuccessDockerConnection()
 	jobMap[jobName] = newJob(dockerName, target)
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cache.NewCacheManager(logger))
 	defer server.Close()
 
 	details := newDetails(jobName, target, dockerName)
@@ -256,6 +282,7 @@ func TestDockerWithInvalidAction(t *testing.T) {
 
 	assert.Equal(t, 400, responseStart.Status)
 	assert.Equal(t, fmt.Sprintf("The action {%s} is not supported", "invalidAction"), responseStart.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestRandomDockerWithInvalidAction(t *testing.T) {
@@ -268,7 +295,9 @@ func TestRandomDockerWithInvalidAction(t *testing.T) {
 	connectionPool["target"] = withSuccessDockerConnection()
 	jobMap[jobName] = newJob(dockerName, "target")
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cache.NewCacheManager(logger))
 	defer server.Close()
 
 	details := newDetailsNoTarget(jobName, dockerName)
@@ -280,6 +309,7 @@ func TestRandomDockerWithInvalidAction(t *testing.T) {
 
 	assert.Equal(t, 400, responseStart.Status)
 	assert.Equal(t, fmt.Sprintf("The action {%s} is not supported", "invalidAction"), responseStart.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestStartStopRandomDockerOneOfJobOrDockerNameNotExist(t *testing.T) {
@@ -294,7 +324,9 @@ func TestStartStopRandomDockerOneOfJobOrDockerNameNotExist(t *testing.T) {
 	connectionPool["target"] = withSuccessDockerConnection()
 	jobMap[jobName] = newJob(dockerName, "target")
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cacheManager)
 	defer server.Close()
 
 	details := newDetailsNoTarget(jobName, dockerToStart)
@@ -316,6 +348,7 @@ func TestStartStopRandomDockerOneOfJobOrDockerNameNotExist(t *testing.T) {
 
 	assert.Equal(t, 400, responseStop.Status)
 	assert.Equal(t, fmt.Sprintf("Could not find job {%s}", differentJobName), responseStop.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func withSuccessDockerConnection() *connection {
@@ -395,10 +428,11 @@ func newJob(componentName string, targets ...string) *config.Job {
 	}
 }
 
-func httpTestServer(jobMap map[string]*config.Job, connectionPool map[string]*connection) *httptest.Server {
+func httpTestServer(jobMap map[string]*config.Job, connectionPool map[string]*connection, cache *cache.Manager) *httptest.Server {
 	dController := &DController{
 		jobs:           jobMap,
 		connectionPool: connectionPool,
+		cacheManager:   cache,
 		logger:         logger,
 	}
 

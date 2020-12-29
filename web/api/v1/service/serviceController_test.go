@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/SotirisAlfonsos/chaos-master/cache"
+
 	"github.com/SotirisAlfonsos/chaos-master/config"
 
 	"github.com/gorilla/mux"
@@ -52,9 +54,11 @@ func TestStartServiceSuccess(t *testing.T) {
 
 	connectionPool[target] = withSuccessServiceConnection()
 	connectionPool["wrong target"] = withFailureServiceConnection()
-
 	jobMap[jobName] = newJob(serviceName, target, "wrong target")
-	server := httpTestServer(jobMap, connectionPool)
+
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cacheManager)
 	defer server.Close()
 
 	details := newDetails(jobName, target, serviceName)
@@ -67,6 +71,7 @@ func TestStartServiceSuccess(t *testing.T) {
 	assert.Equal(t, 200, response.Status)
 	assert.Equal(t, fmt.Sprintf("Response from target {%s}, {}, {SUCCESS}", target), response.Message)
 	assert.Equal(t, "", response.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestStopServiceSuccess(t *testing.T) {
@@ -81,7 +86,9 @@ func TestStopServiceSuccess(t *testing.T) {
 	connectionPool["wrong target"] = withErrorServiceConnection("error message")
 	jobMap[jobName] = newJob(serviceName, target, "wrong target")
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cacheManager)
 	defer server.Close()
 
 	details := newDetails(jobName, target, serviceName)
@@ -94,6 +101,7 @@ func TestStopServiceSuccess(t *testing.T) {
 	assert.Equal(t, 200, response.Status)
 	assert.Equal(t, fmt.Sprintf("Response from target {%s}, {}, {SUCCESS}", target), response.Message)
 	assert.Equal(t, "", response.Error)
+	assert.Equal(t, 1, cacheManager.ItemCount())
 }
 
 func TestStartServiceOneOfServiceNameOrTargetNotExist(t *testing.T) {
@@ -109,7 +117,9 @@ func TestStartServiceOneOfServiceNameOrTargetNotExist(t *testing.T) {
 	connectionPool[target] = withSuccessServiceConnection()
 	jobMap[jobName] = newJob(serviceName, target)
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cacheManager)
 	defer server.Close()
 
 	details := newDetails(jobName, target, differentServiceName)
@@ -121,6 +131,7 @@ func TestStartServiceOneOfServiceNameOrTargetNotExist(t *testing.T) {
 
 	assert.Equal(t, 400, responseStart.Status)
 	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", differentServiceName, target), responseStart.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 
 	details = newDetails(jobName, differentTarget, serviceName)
 
@@ -131,6 +142,7 @@ func TestStartServiceOneOfServiceNameOrTargetNotExist(t *testing.T) {
 
 	assert.Equal(t, 400, responseStop.Status)
 	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", serviceName, differentTarget), responseStop.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestStartStopServiceJobDoesNotExist(t *testing.T) {
@@ -145,7 +157,9 @@ func TestStartStopServiceJobDoesNotExist(t *testing.T) {
 	connectionPool[target] = withSuccessServiceConnection()
 	jobMap[jobName] = newJob(serviceName, target)
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cacheManager)
 	defer server.Close()
 
 	details := newDetails(jobToStart, target, serviceName)
@@ -157,6 +171,7 @@ func TestStartStopServiceJobDoesNotExist(t *testing.T) {
 
 	assert.Equal(t, 400, responseStart.Status)
 	assert.Equal(t, fmt.Sprintf("Could not find job {%s}", jobToStart), responseStart.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 
 	responseStop, err := servicePostCall(server, details, "stop")
 	if err != nil {
@@ -165,6 +180,7 @@ func TestStartStopServiceJobDoesNotExist(t *testing.T) {
 
 	assert.Equal(t, 400, responseStop.Status)
 	assert.Equal(t, fmt.Sprintf("Could not find job {%s}", jobToStart), responseStop.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestStartStopServiceWithFailureResponseFromSlave(t *testing.T) {
@@ -178,7 +194,9 @@ func TestStartStopServiceWithFailureResponseFromSlave(t *testing.T) {
 	connectionPool[target] = withFailureServiceConnection()
 	jobMap[jobName] = newJob(serviceName, target)
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cacheManager)
 	defer server.Close()
 
 	details := newDetails(jobName, target, serviceName)
@@ -190,6 +208,7 @@ func TestStartStopServiceWithFailureResponseFromSlave(t *testing.T) {
 
 	assert.Equal(t, 500, responseStart.Status)
 	assert.Equal(t, fmt.Sprintf("Failure response from target {%s}", target), responseStart.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 
 	responseStop, err := servicePostCall(server, details, "stop")
 	if err != nil {
@@ -198,6 +217,7 @@ func TestStartStopServiceWithFailureResponseFromSlave(t *testing.T) {
 
 	assert.Equal(t, 500, responseStop.Status)
 	assert.Equal(t, fmt.Sprintf("Failure response from target {%s}", target), responseStop.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestStartStopServiceWithErrorResponseFromSlave(t *testing.T) {
@@ -212,7 +232,9 @@ func TestStartStopServiceWithErrorResponseFromSlave(t *testing.T) {
 	connectionPool[target] = withErrorServiceConnection(errorMessage)
 	jobMap[jobName] = newJob(serviceName, target)
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cacheManager)
 	defer server.Close()
 
 	details := newDetails(jobName, target, serviceName)
@@ -224,6 +246,7 @@ func TestStartStopServiceWithErrorResponseFromSlave(t *testing.T) {
 
 	assert.Equal(t, 500, responseStart.Status)
 	assert.Equal(t, fmt.Sprintf("Error response from target {%s}: %s", target, errorMessage), responseStart.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 
 	responseStop, err := servicePostCall(server, details, "stop")
 	if err != nil {
@@ -232,6 +255,7 @@ func TestStartStopServiceWithErrorResponseFromSlave(t *testing.T) {
 
 	assert.Equal(t, 500, responseStop.Status)
 	assert.Equal(t, fmt.Sprintf("Error response from target {%s}: %s", target, errorMessage), responseStop.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestServiceWithInvalidAction(t *testing.T) {
@@ -245,7 +269,9 @@ func TestServiceWithInvalidAction(t *testing.T) {
 	connectionPool[target] = withSuccessServiceConnection()
 	jobMap[jobName] = newJob(serviceName, target)
 
-	server := httpTestServer(jobMap, connectionPool)
+	cacheManager := cache.NewCacheManager(logger)
+
+	server := httpTestServer(jobMap, connectionPool, cacheManager)
 	defer server.Close()
 
 	details := newDetails(jobName, target, serviceName)
@@ -257,6 +283,7 @@ func TestServiceWithInvalidAction(t *testing.T) {
 
 	assert.Equal(t, 400, responseStart.Status)
 	assert.Equal(t, fmt.Sprintf("The action {%s} is not supported", "invalidAction"), responseStart.Error)
+	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func withSuccessServiceConnection() *connection {
@@ -322,10 +349,11 @@ func newJob(componentName string, targets ...string) *config.Job {
 	}
 }
 
-func httpTestServer(jobMap map[string]*config.Job, connectionPool map[string]*connection) *httptest.Server {
+func httpTestServer(jobMap map[string]*config.Job, connectionPool map[string]*connection, cache *cache.Manager) *httptest.Server {
 	sController := &SController{
 		jobs:           jobMap,
 		connectionPool: connectionPool,
+		cacheManager:   cache,
 		logger:         logger,
 	}
 

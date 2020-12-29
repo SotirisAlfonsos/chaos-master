@@ -38,8 +38,8 @@ func main() {
 	healthChecker := healthcheck.Register(connections, logger)
 	healthChecker.Start(conf.HealthCheckReport)
 
-	options := v1.NewAPIOptions(conf.APIOptions, jobMap, connections)
-	restAPI := v1.NewRestAPI(options, healthChecker, logger)
+	options := v1.NewAPIOptions(conf.APIOptions, jobMap, connections, logger)
+	restAPI := v1.NewRestAPI(options, healthChecker)
 	restAPI.RunAPIController()
 }
 

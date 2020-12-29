@@ -14,29 +14,6 @@ type Connections struct {
 	Pool map[string]*grpc.ClientConn
 }
 
-//
-//type Clients struct {
-//	Health  map[string]HealthClientConnection
-//	Service map[string][]ServiceClientConnection
-//	Docker  map[string][]DockerClientConnection
-//}
-//
-//type HealthClientConnection struct {
-//	Client proto.HealthClient
-//}
-//
-//type ServiceClientConnection struct {
-//	Name   string
-//	Target string
-//	Client proto.ServiceClient
-//}
-//
-//type DockerClientConnection struct {
-//	Name   string
-//	Target string
-//	Client proto.DockerClient
-//}
-
 func GetConnectionPool(jobsFromConfig []*config.JobsFromConfig, logger log.Logger) *Connections {
 	connections := &Connections{
 		Pool: make(map[string]*grpc.ClientConn),

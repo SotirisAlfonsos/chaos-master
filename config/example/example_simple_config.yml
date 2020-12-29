@@ -7,7 +7,7 @@ jobs:
     type: "Docker"
     component_name: "my_zoo"
     targets: ['127.0.0.1:8081']
-  - job_name: "zookeeper"
+  - job_name: "zookeeper service"
     type: "Service"
     component_name: "simple"
     targets: ['127.0.0.1:8082', '127.0.0.1:8081']

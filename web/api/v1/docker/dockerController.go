@@ -8,6 +8,8 @@ import (
 	"math/rand"
 	"net/http"
 
+	"github.com/SotirisAlfonsos/chaos-master/cache"
+
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	"google.golang.org/grpc"
 
@@ -21,6 +23,7 @@ import (
 type DController struct {
 	jobs           map[string]*config.Job
 	connectionPool map[string]*connection
+	cacheManager   *cache.Manager
 	logger         log.Logger
 }
 
@@ -29,7 +32,8 @@ type connection struct {
 	dockerClient proto.DockerClient
 }
 
-func NewDockerController(jobs map[string]*config.Job, connections *network.Connections, logger log.Logger) *DController {
+func NewDockerController(jobs map[string]*config.Job, connections *network.Connections,
+	cache *cache.Manager, logger log.Logger) *DController {
 	connPool := make(map[string]*connection)
 	for target, grpcConn := range connections.Pool {
 		connPool[target] = &connection{
@@ -40,6 +44,7 @@ func NewDockerController(jobs map[string]*config.Job, connections *network.Conne
 	return &DController{
 		jobs:           jobs,
 		connectionPool: connPool,
+		cacheManager:   cache,
 		logger:         logger,
 	}
 }
@@ -182,6 +187,9 @@ func (d *DController) performAction(action action, dockerClient proto.DockerClie
 	default:
 		response.Message = fmt.Sprintf("Response from target {%s}, {%s}, {%s}", target, statusResponse.Message, statusResponse.Status)
 		_ = level.Info(d.logger).Log("msg", response.Message)
+		if err = d.updateCache(dockerRequest, dockerClient, target, action); err != nil {
+			_ = level.Error(d.logger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
+		}
 	}
 }
 
@@ -229,6 +237,22 @@ func (d *DController) randomDocker(w http.ResponseWriter, r *http.Request, do st
 
 func getRandomTarget(targets []string) string {
 	return targets[rand.Intn(len(targets))]
+}
+
+func (d *DController) updateCache(dockerRequest *proto.DockerRequest, dockerClient proto.DockerClient, target string, action action) error {
+	uniqueName := fmt.Sprintf("%s %s %s", dockerRequest.JobName, dockerRequest.Name, target)
+	switch action {
+	case start:
+		d.cacheManager.Delete(uniqueName)
+		return nil
+	case stop:
+		recoveryFunc := func() (*proto.StatusResponse, error) {
+			return dockerClient.Start(context.Background(), dockerRequest)
+		}
+		return d.cacheManager.Register(uniqueName, recoveryFunc)
+	default:
+		return errors.New(fmt.Sprintf("Action %s not supported for cache operation", action))
+	}
 }
 
 func (r *Response) internalServerError(message string, logger log.Logger) {
