@@ -9,6 +9,7 @@ import (
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/service"
 	"github.com/go-kit/kit/log"
 	"github.com/gorilla/mux"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 type APIRouter struct {
@@ -32,14 +33,15 @@ func (r *APIRouter) AddRoutes(healthChecker *healthcheck.HealthChecker, router *
 	base := "/chaos/api/v1"
 
 	router = router.PathPrefix(base).Subrouter()
-	setSlaveRouters(router, r)
+	setBotRouters(router, r)
 	setRecoverRouter(router, r)
 	setStatusRouter(healthChecker, router, r.logger)
+	setSwaggerRouter(router)
 
 	return router
 }
 
-func setSlaveRouters(router *mux.Router, r *APIRouter) {
+func setBotRouters(router *mux.Router, r *APIRouter) {
 	serviceControllerRouter(router, r)
 	dockerControllerRouter(router, r)
 }
@@ -51,7 +53,7 @@ func setRecoverRouter(router *mux.Router, r *APIRouter) {
 }
 
 func setStatusRouter(healthChecker *healthcheck.HealthChecker, router *mux.Router, logger log.Logger) {
-	statusController := &Slaves{StatusMap: healthChecker.DetailsMap, Logger: logger}
+	statusController := &Bots{StatusMap: healthChecker.DetailsMap, Logger: logger}
 	router.HandleFunc("/master/status", statusController.Status).Methods("GET")
 }
 
@@ -77,4 +79,8 @@ func filterJobsOnType(jobMap map[string]*config.Job, failureType config.FailureT
 		}
 	}
 	return newJobMap
+}
+
+func setSwaggerRouter(router *mux.Router) {
+	router.PathPrefix("/swagger").Handler(httpSwagger.WrapHandler)
 }

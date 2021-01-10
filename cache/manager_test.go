@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/SotirisAlfonsos/chaos-bot/proto"
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
-	"github.com/SotirisAlfonsos/chaos-slave/proto"
 	"github.com/go-kit/kit/log"
 	"github.com/stretchr/testify/assert"
 )

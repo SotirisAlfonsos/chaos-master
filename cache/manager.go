@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"github.com/SotirisAlfonsos/chaos-slave/proto"
+	"github.com/SotirisAlfonsos/chaos-bot/proto"
 	"github.com/go-kit/kit/log"
 	"github.com/patrickmn/go-cache"
 )

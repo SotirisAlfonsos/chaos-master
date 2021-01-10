@@ -16,10 +16,10 @@ import (
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/gorilla/mux"
 
+	"github.com/SotirisAlfonsos/chaos-bot/proto"
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/SotirisAlfonsos/chaos-master/healthcheck"
 	"github.com/SotirisAlfonsos/chaos-master/network"
-	"github.com/SotirisAlfonsos/chaos-slave/proto"
 	"github.com/stretchr/testify/assert"
 )
 

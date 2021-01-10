@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/SotirisAlfonsos/chaos-bot/proto"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
-	"github.com/SotirisAlfonsos/chaos-slave/proto"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"

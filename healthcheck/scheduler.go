@@ -9,7 +9,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/SotirisAlfonsos/chaos-slave/proto"
+	"github.com/SotirisAlfonsos/chaos-bot/proto"
 
 	"github.com/SotirisAlfonsos/chaos-master/network"
 )
@@ -52,11 +52,11 @@ func (hch *HealthChecker) Start(report bool) {
 			}
 		}
 
-		_ = level.Debug(hch.logger).Log("msg", "checking status of slaves")
+		_ = level.Debug(hch.logger).Log("msg", "checking status of bots")
 
 		if report {
 			for target, details := range hch.DetailsMap {
-				_ = level.Info(hch.logger).Log("msg", fmt.Sprintf("Status of slave %s is %s", target, details.Status))
+				_ = level.Info(hch.logger).Log("msg", fmt.Sprintf("Status of bot %s is %s", target, details.Status))
 			}
 		}
 	})

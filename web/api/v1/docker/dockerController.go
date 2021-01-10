@@ -8,10 +8,10 @@ import (
 	"math/rand"
 	"net/http"
 
+	"github.com/SotirisAlfonsos/chaos-bot/proto"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/SotirisAlfonsos/chaos-master/network"
-	"github.com/SotirisAlfonsos/chaos-slave/proto"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"

@@ -5,19 +5,23 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/SotirisAlfonsos/chaos-master/web/api"
-
-	"github.com/go-kit/kit/log/level"
-
-	"github.com/SotirisAlfonsos/chaos-master/healthcheck"
-
-	"github.com/SotirisAlfonsos/chaos-master/network"
+	_ "github.com/SotirisAlfonsos/chaos-master/docs"
 
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/config"
+	"github.com/SotirisAlfonsos/chaos-master/healthcheck"
+	"github.com/SotirisAlfonsos/chaos-master/network"
+	"github.com/SotirisAlfonsos/chaos-master/web/api"
 	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 )
 
+// @title Swagger API
+// @version 1.0
+// @description This is the chaos master API.
+
+// @host localhost:8090
+// @BasePath /chaos/api/v1
 func main() {
 	configFile := flag.String("config.file", "", "the file that contains the configuration for the chaos master")
 	debugLevel := flag.String("debug.level", "info", "the debug level for the chaos master")

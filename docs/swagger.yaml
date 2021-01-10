@@ -1,0 +1,28 @@
+basePath: /chaos/api/v1
+host: localhost:8090
+info:
+  contact: {}
+  description: This is the chaos master API.
+  title: Swagger API
+  version: "1.0"
+paths:
+  /master/status:
+    get:
+      consumes:
+      - application/json
+      description: Bot status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Bots status
+          schema:
+            type: string
+        "500":
+          description: ok
+          schema:
+            type: string
+      summary: get master status
+      tags:
+      - example
+swagger: "2.0"

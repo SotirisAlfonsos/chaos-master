@@ -4,3 +4,19 @@
 [![codecov.io](https://codecov.io/github/SotirisAlfonsos/chaos-master/coverage.svg?branch=master)](https://codecov.io/github/SotirisAlfonsos/chaos-master?branch=master)
 
 # chaos-master
+The master provides an api to send fault injections to the [chaos bots](https://github.com/SotirisAlfonsos/chaos-bot)  
+
+#### Chaos in practice
+1. Start by defining a ‘steady state’.
+2. Hypothesize that this steady state will continue in both the control group and the experimental group.
+3. <b>Inject failures that reflect real world events.</b>
+4. <i>Try to disprove the hypothesis by looking for a difference in steady state between the control group and the experimental group.</i>
+5. <b>Recover fast to the ‘steady state’.</b>
+
+The master and bots focus on points <b>3</b> and <b>5</b>
+
+## Stating Up
+Start the chaos master providing a <i>config.file</i> that contains the job definitions. See an example of the file in the <i>config/example</i> folder.
+
+### API
+See the api specification after starting the master at <i>\<host\>/chaos/api/v1/swagger</i>

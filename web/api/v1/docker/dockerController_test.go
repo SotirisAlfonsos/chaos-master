@@ -10,10 +10,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/SotirisAlfonsos/chaos-bot/proto"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/config"
-	"github.com/SotirisAlfonsos/chaos-slave/proto"
 	"github.com/go-kit/kit/log"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -180,7 +180,7 @@ func TestStartStopDockerJobDoesNotExist(t *testing.T) {
 	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
-func TestStartStopDockerWithFailureResponseFromSlave(t *testing.T) {
+func TestStartStopDockerWithFailureResponseFromBot(t *testing.T) {
 	var jobName = "jobName"
 	var dockerName = "dockerName"
 	var target = "target"
@@ -217,7 +217,7 @@ func TestStartStopDockerWithFailureResponseFromSlave(t *testing.T) {
 	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
-func TestStartStopDockerWithErrorResponseFromSlave(t *testing.T) {
+func TestStartStopDockerWithErrorResponseFromBot(t *testing.T) {
 	var jobName = "jobName"
 	var dockerName = "dockerName"
 	var target = "target"
