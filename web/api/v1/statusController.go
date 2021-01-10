@@ -1,4 +1,4 @@
-package status
+package v1
 
 import (
 	"fmt"

@@ -9,44 +9,25 @@ import (
 	"net/http"
 
 	"github.com/SotirisAlfonsos/chaos-master/cache"
-
 	"github.com/SotirisAlfonsos/chaos-master/config"
-	"google.golang.org/grpc"
-
 	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/SotirisAlfonsos/chaos-slave/proto"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 )
 
 type DController struct {
 	jobs           map[string]*config.Job
-	connectionPool map[string]*connection
+	connectionPool map[string]*dConnection
 	cacheManager   *cache.Manager
 	logger         log.Logger
 }
 
-type connection struct {
+type dConnection struct {
 	grpcConn     *grpc.ClientConn
 	dockerClient proto.DockerClient
-}
-
-func NewDockerController(jobs map[string]*config.Job, connections *network.Connections,
-	cache *cache.Manager, logger log.Logger) *DController {
-	connPool := make(map[string]*connection)
-	for target, grpcConn := range connections.Pool {
-		connPool[target] = &connection{
-			grpcConn:     grpcConn,
-			dockerClient: proto.NewDockerClient(grpcConn),
-		}
-	}
-	return &DController{
-		jobs:           jobs,
-		connectionPool: connPool,
-		cacheManager:   cache,
-		logger:         logger,
-	}
 }
 
 type action int
@@ -71,32 +52,41 @@ func toActionEnum(value string) (action, error) {
 	return notImplemented, errors.New(fmt.Sprintf("The action {%s} is not supported", value))
 }
 
-type Response struct {
-	Message string `json:"message"`
-	Error   string `json:"error,"`
-	Status  int    `json:"status"`
+func NewDockerController(jobs map[string]*config.Job, connections *network.Connections,
+	cache *cache.Manager, logger log.Logger) *DController {
+	connPool := make(map[string]*dConnection)
+	for target, grpcConn := range connections.Pool {
+		connPool[target] = &dConnection{
+			grpcConn:     grpcConn,
+			dockerClient: proto.NewDockerClient(grpcConn),
+		}
+	}
+	return &DController{
+		jobs:           jobs,
+		connectionPool: connPool,
+		cacheManager:   cache,
+		logger:         logger,
+	}
 }
 
-type Details struct {
+type RequestPayload struct {
 	Job       string `json:"job"`
 	Container string `json:"containerName"`
 	Target    string `json:"target"`
 }
 
-type DetailsNoTarget struct {
+type RequestPayloadNoTarget struct {
 	Job       string `json:"job"`
 	Container string `json:"containerName"`
 }
 
-func getDefaultResponse() *Response {
-	return &Response{
-		Message: "",
-		Error:   "",
-		Status:  200,
-	}
+type ResponsePayload struct {
+	Message string `json:"message"`
+	Error   string `json:"error"`
+	Status  int    `json:"status"`
 }
 
-func newDockerRequest(details *Details) *proto.DockerRequest {
+func newDockerRequest(details *RequestPayload) *proto.DockerRequest {
 	return &proto.DockerRequest{
 		JobName:              details.Job,
 		Name:                 details.Container,
@@ -106,7 +96,7 @@ func newDockerRequest(details *Details) *proto.DockerRequest {
 	}
 }
 
-func newDockerRequestNoTarget(details *DetailsNoTarget) *proto.DockerRequest {
+func newDockerRequestNoTarget(details *RequestPayloadNoTarget) *proto.DockerRequest {
 	return &proto.DockerRequest{
 		JobName:              details.Job,
 		Name:                 details.Container,
@@ -123,10 +113,10 @@ func (d *DController) DockerAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := getDefaultResponse()
+	response := newDefaultResponse()
 
-	details := &Details{}
-	err := json.NewDecoder(r.Body).Decode(&details)
+	requestPayload := &RequestPayload{}
+	err := json.NewDecoder(r.Body).Decode(&requestPayload)
 	if err != nil {
 		response.badRequest("Could not decode request body", d.logger)
 		setResponseInWriter(w, response, d.logger)
@@ -142,29 +132,29 @@ func (d *DController) DockerAction(w http.ResponseWriter, r *http.Request) {
 
 	dockerExists := false
 
-	_ = level.Info(d.logger).Log("msg", fmt.Sprintf("%s container with name {%s}", action, details.Container))
+	_ = level.Info(d.logger).Log("msg", fmt.Sprintf("%s container with name {%s}", action, requestPayload.Container))
 
-	if job, ok := d.jobs[details.Job]; ok {
+	if job, ok := d.jobs[requestPayload.Job]; ok {
 		for _, target := range job.Target {
-			if job.ComponentName == details.Container && target == details.Target {
-				dockerRequest := newDockerRequest(details)
-				d.performAction(action, d.connectionPool[target].dockerClient, dockerRequest, details.Target, response)
+			if job.ComponentName == requestPayload.Container && target == requestPayload.Target {
+				dockerRequest := newDockerRequest(requestPayload)
+				d.performAction(action, d.connectionPool[target].dockerClient, dockerRequest, requestPayload.Target, response)
 				dockerExists = true
 			}
 		}
 
 		if !dockerExists {
-			response.badRequest(fmt.Sprintf("Container {%s} does not exist on target {%s}", details.Container, details.Target), d.logger)
+			response.badRequest(fmt.Sprintf("Container {%s} does not exist on target {%s}", requestPayload.Container, requestPayload.Target), d.logger)
 		}
 	} else {
-		response.badRequest(fmt.Sprintf("Could not find job {%s}", details.Job), d.logger)
+		response.badRequest(fmt.Sprintf("Could not find job {%s}", requestPayload.Job), d.logger)
 	}
 
 	setResponseInWriter(w, response, d.logger)
 }
 
 func (d *DController) performAction(action action, dockerClient proto.DockerClient,
-	dockerRequest *proto.DockerRequest, target string, response *Response) {
+	dockerRequest *proto.DockerRequest, target string, response *ResponsePayload) {
 	var statusResponse *proto.StatusResponse
 	var err error
 
@@ -194,17 +184,17 @@ func (d *DController) performAction(action action, dockerClient proto.DockerClie
 }
 
 func (d *DController) randomDocker(w http.ResponseWriter, r *http.Request, do string) {
-	response := getDefaultResponse()
+	response := newDefaultResponse()
 
 	if do != "random" {
-		response := &Response{}
+		response := &ResponsePayload{}
 		response.badRequest(fmt.Sprintf("Do query parameter {%s} not allowed", do), d.logger)
 		setResponseInWriter(w, response, d.logger)
 		return
 	}
 
-	details := &DetailsNoTarget{}
-	err := json.NewDecoder(r.Body).Decode(&details)
+	requestPayloadNoTarget := &RequestPayloadNoTarget{}
+	err := json.NewDecoder(r.Body).Decode(&requestPayloadNoTarget)
 	if err != nil {
 		response.badRequest("Could not decode request body", d.logger)
 		setResponseInWriter(w, response, d.logger)
@@ -220,54 +210,22 @@ func (d *DController) randomDocker(w http.ResponseWriter, r *http.Request, do st
 
 	_ = level.Info(d.logger).Log("msg", fmt.Sprintf("%s any container", action))
 
-	if job, ok := d.jobs[details.Job]; ok {
+	if job, ok := d.jobs[requestPayloadNoTarget.Job]; ok {
 		target := getRandomTarget(job.Target)
-		if job.ComponentName == details.Container {
-			dockerRequest := newDockerRequestNoTarget(details)
+		if job.ComponentName == requestPayloadNoTarget.Container {
+			dockerRequest := newDockerRequestNoTarget(requestPayloadNoTarget)
 			d.performAction(action, d.connectionPool[target].dockerClient, dockerRequest, target, response)
 		} else {
-			response.badRequest(fmt.Sprintf("Could not find container name {%s}", details.Container), d.logger)
+			response.badRequest(fmt.Sprintf("Could not find container name {%s}", requestPayloadNoTarget.Container), d.logger)
 		}
 	} else {
-		response.badRequest(fmt.Sprintf("Could not find job {%s}", details.Job), d.logger)
+		response.badRequest(fmt.Sprintf("Could not find job {%s}", requestPayloadNoTarget.Job), d.logger)
 	}
 
 	setResponseInWriter(w, response, d.logger)
 }
 
-func getRandomTarget(targets []string) string {
-	return targets[rand.Intn(len(targets))]
-}
-
-func (d *DController) updateCache(dockerRequest *proto.DockerRequest, dockerClient proto.DockerClient, target string, action action) error {
-	uniqueName := fmt.Sprintf("%s %s %s", dockerRequest.JobName, dockerRequest.Name, target)
-	switch action {
-	case start:
-		d.cacheManager.Delete(uniqueName)
-		return nil
-	case stop:
-		recoveryFunc := func() (*proto.StatusResponse, error) {
-			return dockerClient.Start(context.Background(), dockerRequest)
-		}
-		return d.cacheManager.Register(uniqueName, recoveryFunc)
-	default:
-		return errors.New(fmt.Sprintf("Action %s not supported for cache operation", action))
-	}
-}
-
-func (r *Response) internalServerError(message string, logger log.Logger) {
-	r.Error = message
-	r.Status = 500
-	_ = level.Error(logger).Log("msg", "Internal server error", "err", message)
-}
-
-func (r *Response) badRequest(message string, logger log.Logger) {
-	r.Error = message
-	r.Status = 400
-	_ = level.Warn(logger).Log("msg", "Bad request", "warn", message)
-}
-
-func setResponseInWriter(w http.ResponseWriter, resp *Response, logger log.Logger) {
+func setResponseInWriter(w http.ResponseWriter, resp *ResponsePayload, logger log.Logger) {
 	reqBodyBytes := new(bytes.Buffer)
 	err := json.NewEncoder(reqBodyBytes).Encode(resp)
 	if err != nil {
@@ -283,4 +241,44 @@ func setResponseInWriter(w http.ResponseWriter, resp *Response, logger log.Logge
 		w.WriteHeader(500)
 		return
 	}
+}
+
+func getRandomTarget(targets []string) string {
+	return targets[rand.Intn(len(targets))]
+}
+
+func (d *DController) updateCache(dockerRequest *proto.DockerRequest, dockerClient proto.DockerClient, target string, action action) error {
+	uniqueName := fmt.Sprintf("%s,%s,%s", dockerRequest.JobName, dockerRequest.Name, target)
+	switch action {
+	case start:
+		d.cacheManager.Delete(uniqueName)
+		return nil
+	case stop:
+		recoveryFunc := func() (*proto.StatusResponse, error) {
+			return dockerClient.Start(context.Background(), dockerRequest)
+		}
+		return d.cacheManager.Register(uniqueName, recoveryFunc)
+	default:
+		return errors.New(fmt.Sprintf("Action %s not supported for cache operation", action))
+	}
+}
+
+func newDefaultResponse() *ResponsePayload {
+	return &ResponsePayload{
+		Message: "",
+		Error:   "",
+		Status:  200,
+	}
+}
+
+func (r *ResponsePayload) badRequest(message string, logger log.Logger) {
+	r.Error = message
+	r.Status = 400
+	_ = level.Warn(logger).Log("msg", "Bad request", "warn", message)
+}
+
+func (r *ResponsePayload) internalServerError(message string, logger log.Logger) {
+	r.Error = message
+	r.Status = 500
+	_ = level.Error(logger).Log("msg", "Internal server error", "err", message)
 }

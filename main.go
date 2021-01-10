@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	v1 "github.com/SotirisAlfonsos/chaos-master/web/api/v1"
+	"github.com/SotirisAlfonsos/chaos-master/web/api"
 
 	"github.com/go-kit/kit/log/level"
 
@@ -38,8 +38,8 @@ func main() {
 	healthChecker := healthcheck.Register(connections, logger)
 	healthChecker.Start(conf.HealthCheckReport)
 
-	options := v1.NewAPIOptions(conf.APIOptions, jobMap, connections, logger)
-	restAPI := v1.NewRestAPI(options, healthChecker)
+	options := api.NewAPIOptions(conf.APIOptions, jobMap, connections, logger)
+	restAPI := api.NewRestAPI(options, healthChecker)
 	restAPI.RunAPIController()
 }
 

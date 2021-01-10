@@ -25,6 +25,10 @@ func (m *Manager) Register(key string, function func() (*proto.StatusResponse, e
 	return m.cache.Add(key, function, 0)
 }
 
+func (m *Manager) GetAll() map[string]cache.Item {
+	return m.cache.Items()
+}
+
 func (m *Manager) Get(key string) func() (*proto.StatusResponse, error) {
 	if f, ok := m.cache.Get(key); ok {
 		return f.(func() (*proto.StatusResponse, error))

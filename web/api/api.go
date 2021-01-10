@@ -1,4 +1,4 @@
-package v1
+package api
 
 import (
 	"context"
@@ -7,16 +7,13 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/go-kit/kit/log"
+
 	"github.com/SotirisAlfonsos/chaos-master/cache"
-
 	"github.com/SotirisAlfonsos/chaos-master/config"
-
 	"github.com/SotirisAlfonsos/chaos-master/healthcheck"
 	"github.com/SotirisAlfonsos/chaos-master/network"
-	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/docker"
-	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/service"
-	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/status"
-	"github.com/go-kit/kit/log"
+	v1 "github.com/SotirisAlfonsos/chaos-master/web/api/v1"
 	"github.com/go-kit/kit/log/level"
 	"github.com/gorilla/mux"
 )
@@ -73,11 +70,9 @@ func NewAPIOptions(restAPIOptions *config.RestAPIOptions, jobMap map[string]*con
 }
 
 func NewRestAPI(opt *Options, healthChecker *healthcheck.HealthChecker) *RestAPI {
-	base := "/chaos/api/v1"
-
 	router := mux.NewRouter()
-	setSlaveRouters(router, opt, base)
-	setStatusRouter(healthChecker, router, base, opt.logger)
+	apiRouter := v1.NewAPIRouter(opt.jobMap, opt.connections, opt.cache, opt.logger)
+	router = apiRouter.AddRoutes(healthChecker, router)
 	router.Schemes(opt.restAPIOptions.Scheme)
 
 	return &RestAPI{
@@ -85,32 +80,6 @@ func NewRestAPI(opt *Options, healthChecker *healthcheck.HealthChecker) *RestAPI
 		Logger: opt.logger,
 		Port:   opt.restAPIOptions.Port,
 	}
-}
-
-func setSlaveRouters(router *mux.Router, opt *Options, base string) {
-	jobRouter := router.PathPrefix(base).Subrouter()
-	serviceControllerRouter(jobRouter, opt)
-	dockerControllerRouter(jobRouter, opt)
-}
-
-func setStatusRouter(healthChecker *healthcheck.HealthChecker, router *mux.Router, base string, logger log.Logger) {
-	statusController := &status.Slaves{StatusMap: healthChecker.DetailsMap, Logger: logger}
-	serviceRouter := router.PathPrefix(base + "/master").Subrouter()
-	serviceRouter.HandleFunc("/status", statusController.Status).Methods("GET")
-}
-
-func serviceControllerRouter(router *mux.Router, opt *Options) {
-	sController := service.NewServiceController(filterJobsOnType(opt.jobMap, config.Service), opt.connections, opt.cache, opt.logger)
-	router.HandleFunc("/service", sController.ServiceAction).
-		Queries("action", "{action}").
-		Methods("POST")
-}
-
-func dockerControllerRouter(router *mux.Router, opt *Options) {
-	dController := docker.NewDockerController(filterJobsOnType(opt.jobMap, config.Docker), opt.connections, opt.cache, opt.logger)
-	router.HandleFunc("/docker", dController.DockerAction).
-		Queries("action", "{action}").
-		Methods("POST")
 }
 
 func getServer(router http.Handler, port string) *http.Server {
@@ -122,14 +91,4 @@ func getServer(router http.Handler, port string) *http.Server {
 	}
 
 	return server
-}
-
-func filterJobsOnType(jobMap map[string]*config.Job, failureType config.FailureType) map[string]*config.Job {
-	newJobMap := make(map[string]*config.Job)
-	for target, job := range jobMap {
-		if job.FailureType == failureType {
-			newJobMap[target] = job
-		}
-	}
-	return newJobMap
 }

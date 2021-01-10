@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"io/ioutil"
+	"strings"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -75,6 +76,9 @@ func (config *Config) validate() error {
 	for _, jobFromConfig := range config.JobsFromConfig {
 		if jobFromConfig.JobName == "" || jobFromConfig.ComponentName == "" || jobFromConfig.FailureType == "" {
 			return errors.New("Every job should contain a job_name, type and component_name")
+		}
+		if strings.Contains(jobFromConfig.JobName, ",") || strings.Contains(jobFromConfig.ComponentName, ",") {
+			return errors.New("The job name and the component name should not contain the unique operator \",\"")
 		}
 	}
 	return nil

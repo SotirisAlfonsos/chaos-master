@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/SotirisAlfonsos/chaos-master/cache"
-
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/SotirisAlfonsos/chaos-slave/proto"
@@ -20,21 +19,21 @@ import (
 
 type SController struct {
 	jobs           map[string]*config.Job
-	connectionPool map[string]*connection
+	connectionPool map[string]*sConnection
 	cacheManager   *cache.Manager
 	logger         log.Logger
 }
 
-type connection struct {
+type sConnection struct {
 	grpcConn      *grpc.ClientConn
 	serviceClient proto.ServiceClient
 }
 
 func NewServiceController(jobs map[string]*config.Job, connections *network.Connections,
 	cache *cache.Manager, logger log.Logger) *SController {
-	connPool := make(map[string]*connection)
+	connPool := make(map[string]*sConnection)
 	for target, grpcConn := range connections.Pool {
-		connPool[target] = &connection{
+		connPool[target] = &sConnection{
 			grpcConn:      grpcConn,
 			serviceClient: proto.NewServiceClient(grpcConn),
 		}
@@ -69,27 +68,19 @@ func toActionEnum(value string) (action, error) {
 	return notImplemented, errors.New(fmt.Sprintf("The action {%s} is not supported", value))
 }
 
-type Response struct {
-	Message string `json:"message"`
-	Error   string `json:"error,"`
-	Status  int    `json:"status"`
-}
-
-type Details struct {
+type RequestPayload struct {
 	Job         string `json:"job"`
 	ServiceName string `json:"serviceName"`
 	Target      string `json:"target"`
 }
 
-func getDefaultResponse() *Response {
-	return &Response{
-		Message: "",
-		Error:   "",
-		Status:  200,
-	}
+type ResponsePayload struct {
+	Message string `json:"message"`
+	Error   string `json:"error"`
+	Status  int    `json:"status"`
 }
 
-func newServiceRequest(details *Details) *proto.ServiceRequest {
+func newServiceRequest(details *RequestPayload) *proto.ServiceRequest {
 	return &proto.ServiceRequest{
 		JobName:              details.Job,
 		Name:                 details.ServiceName,
@@ -100,10 +91,10 @@ func newServiceRequest(details *Details) *proto.ServiceRequest {
 }
 
 func (s *SController) ServiceAction(w http.ResponseWriter, r *http.Request) {
-	response := getDefaultResponse()
+	response := newDefaultResponse()
 
-	details := &Details{}
-	err := json.NewDecoder(r.Body).Decode(&details)
+	requestPayload := &RequestPayload{}
+	err := json.NewDecoder(r.Body).Decode(&requestPayload)
 	if err != nil {
 		response.badRequest("Could not decode request body", s.logger)
 		setResponseInWriter(w, response, s.logger)
@@ -119,29 +110,29 @@ func (s *SController) ServiceAction(w http.ResponseWriter, r *http.Request) {
 
 	serviceExists := false
 
-	_ = level.Info(s.logger).Log("msg", fmt.Sprintf("%s service with name {%s}", action, details.ServiceName))
+	_ = level.Info(s.logger).Log("msg", fmt.Sprintf("%s service with name {%s}", action, requestPayload.ServiceName))
 
-	if job, ok := s.jobs[details.Job]; ok {
+	if job, ok := s.jobs[requestPayload.Job]; ok {
 		for _, target := range job.Target {
-			if target == details.Target && job.ComponentName == details.ServiceName {
-				serviceRequest := newServiceRequest(details)
-				s.performAction(action, s.connectionPool[target].serviceClient, serviceRequest, details, response)
+			if target == requestPayload.Target && job.ComponentName == requestPayload.ServiceName {
+				serviceRequest := newServiceRequest(requestPayload)
+				s.performAction(action, s.connectionPool[target].serviceClient, serviceRequest, requestPayload, response)
 				serviceExists = true
 			}
 		}
 
 		if !serviceExists {
-			response.badRequest(fmt.Sprintf("Service {%s} does not exist on target {%s}", details.ServiceName, details.Target), s.logger)
+			response.badRequest(fmt.Sprintf("Service {%s} does not exist on target {%s}", requestPayload.ServiceName, requestPayload.Target), s.logger)
 		}
 	} else {
-		response.badRequest(fmt.Sprintf("Could not find job {%s}", details.Job), s.logger)
+		response.badRequest(fmt.Sprintf("Could not find job {%s}", requestPayload.Job), s.logger)
 	}
 
 	setResponseInWriter(w, response, s.logger)
 }
 
 func (s *SController) performAction(action action, serviceClient proto.ServiceClient,
-	serviceRequest *proto.ServiceRequest, details *Details, response *Response) {
+	serviceRequest *proto.ServiceRequest, details *RequestPayload, response *ResponsePayload) {
 	var statusResponse *proto.StatusResponse
 	var err error
 
@@ -171,7 +162,7 @@ func (s *SController) performAction(action action, serviceClient proto.ServiceCl
 }
 
 func (s *SController) updateCache(serviceRequest *proto.ServiceRequest, serviceClient proto.ServiceClient, target string, action action) error {
-	uniqueName := fmt.Sprintf("%s %s %s", serviceRequest.JobName, serviceRequest.Name, target)
+	uniqueName := fmt.Sprintf("%s,%s,%s", serviceRequest.JobName, serviceRequest.Name, target)
 	switch action {
 	case start:
 		s.cacheManager.Delete(uniqueName)
@@ -186,19 +177,27 @@ func (s *SController) updateCache(serviceRequest *proto.ServiceRequest, serviceC
 	}
 }
 
-func (r *Response) internalServerError(message string, logger log.Logger) {
+func newDefaultResponse() *ResponsePayload {
+	return &ResponsePayload{
+		Message: "",
+		Error:   "",
+		Status:  200,
+	}
+}
+
+func (r *ResponsePayload) internalServerError(message string, logger log.Logger) {
 	r.Error = message
 	r.Status = 500
 	_ = level.Error(logger).Log("msg", "Internal server error", "err", message)
 }
 
-func (r *Response) badRequest(message string, logger log.Logger) {
+func (r *ResponsePayload) badRequest(message string, logger log.Logger) {
 	r.Error = message
 	r.Status = 400
 	_ = level.Warn(logger).Log("msg", "Bad request", "warn", message)
 }
 
-func setResponseInWriter(w http.ResponseWriter, resp *Response, logger log.Logger) {
+func setResponseInWriter(w http.ResponseWriter, resp *ResponsePayload, logger log.Logger) {
 	reqBodyBytes := new(bytes.Buffer)
 	err := json.NewEncoder(reqBodyBytes).Encode(resp)
 	if err != nil {
