@@ -16,7 +16,7 @@ import (
 	"github.com/go-kit/kit/log/level"
 )
 
-// @title Swagger API
+// @title Chaos Master API
 // @version 1.0
 // @description This is the chaos master API.
 

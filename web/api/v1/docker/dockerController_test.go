@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 
 	"github.com/SotirisAlfonsos/chaos-bot/proto"
@@ -23,6 +24,20 @@ import (
 var (
 	logger = getLogger()
 )
+
+type TestData struct {
+	message        string
+	jobMap         map[string]*config.Job
+	connectionPool map[string]*dConnection
+	cacheItems     map[string]func() (*proto.StatusResponse, error)
+	requestPayload *RequestPayload
+	expected       *expectedResult
+}
+
+type expectedResult struct {
+	cacheSize int
+	payload   *ResponsePayload
+}
 
 type mockDockerClient struct {
 	Status *proto.StatusResponse
@@ -42,338 +57,479 @@ func (msc *mockDockerClient) Stop(ctx context.Context, in *proto.DockerRequest, 
 }
 
 func TestStartDockerSuccess(t *testing.T) {
-	var jobName = "jobName"
-	var containerName = "containerName"
-	var target = "target"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*dConnection)
-
-	connectionPool[target] = withSuccessDockerConnection()
-	connectionPool["wrong target"] = withFailureDockerConnection()
-	jobMap[jobName] = newDockerJob(containerName, target, "wrong target")
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := dockerHTTPTestServer(jobMap, connectionPool, cacheManager)
-	defer server.Close()
-
-	details := newDockerRequestPayload(jobName, target, containerName)
-
-	response, err := dockerPostCall(server, details, "start")
-	if err != nil {
-		t.Fatal(err)
+	dataItems := []TestData{
+		{
+			message: "Successfully start single container with specific job, name and target",
+			jobMap: map[string]*config.Job{
+				"job name":           newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+				"127.0.0.2": withSuccessDockerConnection(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+		},
+		{
+			message: "Successfully start single container with specific job, name and target and remove it from the cache",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+			},
+			cacheItems: map[string]func() (*proto.StatusResponse, error){
+				"job name,container name,127.0.0.1": functionWithSuccessResponse(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+		},
 	}
 
-	assert.Equal(t, 200, response.Status)
-	assert.Equal(t, fmt.Sprintf("Response from target {%s}, {}, {SUCCESS}", target), response.Message)
-	assert.Equal(t, "", response.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "start")
+	}
 }
 
 func TestStopDockerSuccess(t *testing.T) {
-	var jobName = "jobName"
-	var dockerName = "dockerName"
-	var target = "target"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*dConnection)
-
-	connectionPool[target] = withSuccessDockerConnection()
-	connectionPool["wrong target"] = withErrorDockerConnection("error message")
-	jobMap[jobName] = newDockerJob(dockerName, target, "wrong target")
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := dockerHTTPTestServer(jobMap, connectionPool, cacheManager)
-	defer server.Close()
-
-	details := newDockerRequestPayload(jobName, target, dockerName)
-
-	response, err := dockerPostCall(server, details, "stop")
-	if err != nil {
-		t.Fatal(err)
+	dataItems := []TestData{
+		{
+			message: "Successfully stop single container with specific job, name and target and add it in cache",
+			jobMap: map[string]*config.Job{
+				"job name":           newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+				"127.0.0.2": withSuccessDockerConnection(),
+			},
+			cacheItems: map[string]func() (*proto.StatusResponse, error){
+				"job name,container name,127.0.0.2": functionWithSuccessResponse(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 2, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+		},
+		{
+			message: "Successfully stop single container with specific job, name and target and dont add it in cache if already exists",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+			},
+			cacheItems: map[string]func() (*proto.StatusResponse, error){
+				"job name,container name,127.0.0.1": functionWithSuccessResponse(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+		},
 	}
 
-	assert.Equal(t, 200, response.Status)
-	assert.Equal(t, fmt.Sprintf("Response from target {%s}, {}, {SUCCESS}", target), response.Message)
-	assert.Equal(t, "", response.Error)
-	assert.Equal(t, 1, cacheManager.ItemCount())
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "stop")
+	}
 }
 
-func TestStartDockerOneOfContainerNameTargetNotExist(t *testing.T) {
-	var jobName = "jobName"
-	var dockerName = "dockerName"
-	var dockerToStart = "different name"
-	var target = "target"
-	var differentTarget = "different target"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*dConnection)
-
-	connectionPool[target] = withSuccessDockerConnection()
-	jobMap[jobName] = newDockerJob(dockerName, target)
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := dockerHTTPTestServer(jobMap, connectionPool, cache.NewCacheManager(logger))
-	defer server.Close()
-
-	details := newDockerRequestPayload(jobName, target, dockerToStart)
-
-	responseStart, err := dockerPostCall(server, details, "start")
-	if err != nil {
-		t.Fatal(err)
+func TestDockerActionOneOfJobContainerNameTargetDoesNotExist(t *testing.T) {
+	dataItems := []TestData{
+		{
+			message: "Should receive bad request and not update cache for action when job name does not exist",
+			jobMap: map[string]*config.Job{
+				"job name":           newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+			},
+			requestPayload: &RequestPayload{Job: "job name does not exist", Container: "container name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("Could not find job {job name does not exist}")},
+		},
+		{
+			message: "Should receive bad request and not update cache for action when container name does not exist for target",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", Container: "container name does not exist", Target: "127.0.0.1"},
+			expected: &expectedResult{
+				cacheSize: 0,
+				payload:   badRequestResponse("Container {container name does not exist} is not registered for target {127.0.0.1}"),
+			},
+		},
+		{
+			message: "Should receive bad request and not update cache for action when target does not exist for the job and container specified",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "0.0.0.0"},
+			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("Container {container name} is not registered for target {0.0.0.0}")},
+		},
 	}
 
-	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Container {%s} does not exist on target {%s}", dockerToStart, target), responseStart.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
-
-	details = newDockerRequestPayload(jobName, differentTarget, dockerName)
-
-	responseStop, err := dockerPostCall(server, details, "stop")
-	if err != nil {
-		t.Fatal(err)
+	t.Log("Action start")
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "start")
 	}
 
-	assert.Equal(t, 400, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Container {%s} does not exist on target {%s}", dockerName, differentTarget), responseStop.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
+	t.Log("Action stop")
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "stop")
+	}
 }
 
-func TestStartStopDockerJobDoesNotExist(t *testing.T) {
-	var jobName = "jobName"
-	var dockerName = "dockerName"
-	var jobToStart = "different target"
-	var target = "target"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*dConnection)
-
-	connectionPool[target] = withSuccessDockerConnection()
-	jobMap[jobName] = newDockerJob(dockerName, target)
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := dockerHTTPTestServer(jobMap, connectionPool, cache.NewCacheManager(logger))
-	defer server.Close()
-
-	details := newDockerRequestPayload(jobToStart, target, dockerName)
-
-	responseStart, err := dockerPostCall(server, details, "start")
-	if err != nil {
-		t.Fatal(err)
+func TestDockerActionFailure(t *testing.T) {
+	dataItems := []TestData{
+		{
+			message: "Should receive internal server error and not update cache if the request fails on bot",
+			jobMap: map[string]*config.Job{
+				"job name":           newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withFailureDockerConnection(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: internalServerErrorResponse("Failure response from target {127.0.0.1}")},
+		},
+		{
+			message: "Should receive internal server error and not update cache if the request errors on bot",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withErrorDockerConnection("error occurred"),
+			},
+			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
+			expected: &expectedResult{
+				cacheSize: 0, payload: internalServerErrorResponse("Error response from target {127.0.0.1}: error occurred")},
+		},
 	}
 
-	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Could not find job {%s}", jobToStart), responseStart.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
-
-	responseStop, err := dockerPostCall(server, details, "stop")
-	if err != nil {
-		t.Fatal(err)
+	t.Log("Action start")
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "start")
 	}
 
-	assert.Equal(t, 400, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Could not find job {%s}", jobToStart), responseStop.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
-}
-
-func TestStartStopDockerWithFailureResponseFromBot(t *testing.T) {
-	var jobName = "jobName"
-	var dockerName = "dockerName"
-	var target = "target"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*dConnection)
-
-	connectionPool[target] = withFailureDockerConnection()
-	jobMap[jobName] = newDockerJob(dockerName, target)
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := dockerHTTPTestServer(jobMap, connectionPool, cache.NewCacheManager(logger))
-	defer server.Close()
-
-	details := newDockerRequestPayload(jobName, target, dockerName)
-
-	responseStart, err := dockerPostCall(server, details, "start")
-	if err != nil {
-		t.Fatal(err)
+	t.Log("Action stop")
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "stop")
 	}
-
-	assert.Equal(t, 500, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Failure response from target {%s}", target), responseStart.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
-
-	responseStop, err := dockerPostCall(server, details, "stop")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, 500, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Failure response from target {%s}", target), responseStop.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
-}
-
-func TestStartStopDockerWithErrorResponseFromBot(t *testing.T) {
-	var jobName = "jobName"
-	var dockerName = "dockerName"
-	var target = "target"
-	var errorMessage = "error message"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*dConnection)
-
-	connectionPool[target] = withErrorDockerConnection(errorMessage)
-	jobMap[jobName] = newDockerJob(dockerName, target)
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := dockerHTTPTestServer(jobMap, connectionPool, cache.NewCacheManager(logger))
-	defer server.Close()
-
-	details := newDockerRequestPayload(jobName, target, dockerName)
-
-	responseStart, err := dockerPostCall(server, details, "start")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, 500, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Error response from target {%s}: %s", target, errorMessage), responseStart.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
-
-	responseStop, err := dockerPostCall(server, details, "stop")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, 500, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Error response from target {%s}: %s", target, errorMessage), responseStop.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestDockerWithInvalidAction(t *testing.T) {
-	var jobName = "jobName"
-	var dockerName = "dockerName"
-	var target = "target"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*dConnection)
-
-	connectionPool[target] = withSuccessDockerConnection()
-	jobMap[jobName] = newDockerJob(dockerName, target)
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := dockerHTTPTestServer(jobMap, connectionPool, cache.NewCacheManager(logger))
-	defer server.Close()
-
-	details := newDockerRequestPayload(jobName, target, dockerName)
-
-	responseStart, err := dockerPostCall(server, details, "invalidAction")
-	if err != nil {
-		t.Fatal(err)
+	dataItems := []TestData{
+		{
+			message: "Should receive bad request and not update cache if the action to perform is invalid",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("The action {invalidAction} is not supported")},
+		},
 	}
 
-	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("The action {%s} is not supported", "invalidAction"), responseStart.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
+	t.Log("Action invalidAction")
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "invalidAction")
+	}
 }
 
-func TestRandomDockerWithInvalidAction(t *testing.T) {
-	var jobName = "jobName"
-	var dockerName = "dockerName"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*dConnection)
-
-	connectionPool["target"] = withSuccessDockerConnection()
-	jobMap[jobName] = newDockerJob(dockerName, "target")
+func assertActionPerformed(t *testing.T, dataItem TestData, action string) {
+	t.Log(dataItem.message)
 
 	cacheManager := cache.NewCacheManager(logger)
-
-	server := dockerHTTPTestServer(jobMap, connectionPool, cache.NewCacheManager(logger))
-	defer server.Close()
-
-	details := newDockerRequestPayloadNoTarget(jobName, dockerName)
-
-	responseStart, err := dockerPostCallNoTarget(server, details, "invalidAction")
+	server, err := dockerHTTPTestServerWithCacheItems(dataItem.jobMap, dataItem.connectionPool, cacheManager, dataItem.cacheItems)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("The action {%s} is not supported", "invalidAction"), responseStart.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
+	response, err := dockerPostCall(server, dataItem.requestPayload, action)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, dataItem.expected.payload.Status, response.Status)
+	assert.Equal(t, dataItem.expected.payload.Message, response.Message)
+	assert.Equal(t, dataItem.expected.payload.Error, response.Error)
+	assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
+
+	server.Close()
 }
 
-func TestStartStopRandomDockerOneOfJobOrDockerNameNotExist(t *testing.T) {
-	var jobName = "jobName"
-	var differentJobName = "different jobName"
-	var dockerName = "dockerName"
-	var dockerToStart = "different name"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*dConnection)
-
-	connectionPool["target"] = withSuccessDockerConnection()
-	jobMap[jobName] = newDockerJob(dockerName, "target")
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := dockerHTTPTestServer(jobMap, connectionPool, cacheManager)
-	defer server.Close()
-
-	details := newDockerRequestPayloadNoTarget(jobName, dockerToStart)
-
-	responseStart, err := dockerPostCallNoTarget(server, details, "start")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Could not find container name {%s}", dockerToStart), responseStart.Error)
-
-	details = newDockerRequestPayloadNoTarget(differentJobName, dockerName)
-
-	responseStop, err := dockerPostCallNoTarget(server, details, "stop")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, 400, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Could not find job {%s}", differentJobName), responseStop.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
+type TestDataForRandomDocker struct {
+	message        string
+	jobMap         map[string]*config.Job
+	connectionPool map[string]*dConnection
+	cacheItems     map[string]func() (*proto.StatusResponse, error)
+	requestPayload *RequestPayloadNoTarget
+	expected       *expectedResult
 }
 
-func TestStartStopRandomDockerDoActionNotImplemented(t *testing.T) {
-	var jobName = "jobName"
-	var dockerName = "dockerName"
-	var dockerToStart = "different name"
+func TestStartRandomDockerSuccess(t *testing.T) {
+	dataItems := []TestDataForRandomDocker{
+		{
+			message: "Successfully start random container with specific job and name",
+			jobMap: map[string]*config.Job{
+				"job name":           newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+				"127.0.0.2": withSuccessDockerConnection(),
+			},
+			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name"},
+			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.\\d}, {}, {SUCCESS}")},
+		},
+		{
+			message: "Successfully start random container with specific job and name and remove it from the cache",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name", "127.0.0.1"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+			},
+			cacheItems: map[string]func() (*proto.StatusResponse, error){
+				"job name,container name,127.0.0.1": functionWithSuccessResponse(),
+			},
+			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name"},
+			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+		},
+	}
 
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*dConnection)
+	for _, dataItem := range dataItems {
+		assertRandomActionPerformed(t, dataItem, "random", "start")
+	}
+}
 
-	connectionPool["target"] = withSuccessDockerConnection()
-	jobMap[jobName] = newDockerJob(dockerName, "target")
+func TestStopRandomDockerSuccess(t *testing.T) {
+	dataItems := []TestDataForRandomDocker{
+		{
+			message: "Successfully stop random container with specific job and name and add it in cache",
+			jobMap: map[string]*config.Job{
+				"job name":           newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+				"127.0.0.2": withSuccessDockerConnection(),
+			},
+			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name"},
+			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.\\d}, {}, {SUCCESS}")},
+		},
+		{
+			message: "Successfully stop random container with specific job and name and dont add it in cache if it is already present",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name", "127.0.0.1"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+			},
+			cacheItems: map[string]func() (*proto.StatusResponse, error){
+				"job name,container name,127.0.0.1": functionWithSuccessResponse(),
+			},
+			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name"},
+			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+		},
+	}
+
+	for _, dataItem := range dataItems {
+		assertRandomActionPerformed(t, dataItem, "random", "stop")
+	}
+}
+
+func TestDockerActionForRandomTargetOneOfJobContainerNameTargetDoesNotExist(t *testing.T) {
+	dataItems := []TestDataForRandomDocker{
+		{
+			message: "Should receive bad request and not update cache for action when job name does not exist",
+			jobMap: map[string]*config.Job{
+				"job name":           newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+			},
+			requestPayload: &RequestPayloadNoTarget{Job: "job name does not exist", Container: "container name"},
+			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("Could not find job {job name does not exist}")},
+		},
+		{
+			message: "Should receive bad request and not update cache for action when container name does not exist for target",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+			},
+			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name does not exist"},
+			expected: &expectedResult{
+				cacheSize: 0,
+				payload:   badRequestResponse("Could not find container name {container name does not exist}"),
+			},
+		},
+		{
+			message: "Should receive bad request and not update cache for action when job has no targets defined",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+			},
+			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name"},
+			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("Could not get random target for job {job name}. err: No targets available")},
+		},
+	}
+
+	t.Log("Action start")
+	for _, dataItem := range dataItems {
+		assertRandomActionPerformed(t, dataItem, "random", "start")
+	}
+
+	t.Log("Action stop")
+	for _, dataItem := range dataItems {
+		assertRandomActionPerformed(t, dataItem, "random", "stop")
+	}
+}
+
+func TestDockerActionForRandomTargetFailure(t *testing.T) {
+	dataItems := []TestDataForRandomDocker{
+		{
+			message: "Should receive internal server error and not update cache for failure response from bot on action",
+			jobMap: map[string]*config.Job{
+				"job name":           newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withFailureDockerConnection(),
+				"127.0.0.2": withFailureDockerConnection(),
+			},
+			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name"},
+			expected:       &expectedResult{cacheSize: 0, payload: internalServerErrorResponse("Failure response from target {127.0.0.\\d}")},
+		},
+		{
+			message: "Should receive internal server error and not update cache for error response from bot on action",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withErrorDockerConnection("error message"),
+				"127.0.0.2": withErrorDockerConnection("error message"),
+			},
+			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name"},
+			expected: &expectedResult{
+				cacheSize: 0,
+				payload:   internalServerErrorResponse("Error response from target {127.0.0.\\d}: error message"),
+			},
+		},
+	}
+
+	t.Log("Action start")
+	for _, dataItem := range dataItems {
+		assertRandomActionPerformed(t, dataItem, "random", "start")
+	}
+
+	t.Log("Action stop")
+	for _, dataItem := range dataItems {
+		assertRandomActionPerformed(t, dataItem, "random", "stop")
+	}
+}
+
+func TestDockerActionForRandomTargetWithInvalidAction(t *testing.T) {
+	dataItems := []TestDataForRandomDocker{
+		{
+			message: "Should receive bad request and not update cache if the action to perform is invalid",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+			},
+			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name"},
+			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("The action {invalidAction} is not supported")},
+		},
+	}
+
+	t.Log("Action invalidAction")
+	for _, dataItem := range dataItems {
+		assertRandomActionPerformed(t, dataItem, "random", "invalidAction")
+	}
+}
+
+func TestDockerActionForRandomTargetWithInvalidDo(t *testing.T) {
+	dataItems := []TestDataForRandomDocker{
+		{
+			message: "Should receive bad request and not update cache if the action to perform is invalid",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withSuccessDockerConnection(),
+			},
+			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name"},
+			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("Do query parameter {invalidDo} not allowed")},
+		},
+	}
+
+	t.Log("Action invalidAction")
+	for _, dataItem := range dataItems {
+		assertRandomActionPerformed(t, dataItem, "invalidDo", "start")
+	}
+}
+
+func okResponse(message string) *ResponsePayload {
+	return &ResponsePayload{
+		Message: message,
+		Status:  200,
+	}
+}
+
+func badRequestResponse(error string) *ResponsePayload {
+	return &ResponsePayload{
+		Error:  error,
+		Status: 400,
+	}
+}
+
+func internalServerErrorResponse(error string) *ResponsePayload {
+	return &ResponsePayload{
+		Error:  error,
+		Status: 500,
+	}
+}
+
+func functionWithSuccessResponse() func() (*proto.StatusResponse, error) {
+	return func() (*proto.StatusResponse, error) {
+		return &proto.StatusResponse{Status: proto.StatusResponse_SUCCESS}, nil
+	}
+}
+
+func assertRandomActionPerformed(t *testing.T, dataItem TestDataForRandomDocker, do string, action string) {
+	t.Log(dataItem.message)
 
 	cacheManager := cache.NewCacheManager(logger)
-
-	server := dockerHTTPTestServer(jobMap, connectionPool, cacheManager)
-	defer server.Close()
-
-	details := newDockerRequestPayloadNoTarget(jobName, dockerToStart)
-
-	responseStart, err := dockerPostCallNotImplementedDo(server, details, "<random>!")
+	server, err := dockerHTTPTestServerWithCacheItems(dataItem.jobMap, dataItem.connectionPool, cacheManager, dataItem.cacheItems)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Do query parameter {%s} not allowed", "<random>!"), responseStart.Error)
+	response, err := dockerPostCallNoTarget(server, dataItem.requestPayload, do, action)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, dataItem.expected.payload.Status, response.Status)
+	assert.Regexp(t, regexp.MustCompile(dataItem.expected.payload.Message), response.Message)
+	assert.Regexp(t, regexp.MustCompile(dataItem.expected.payload.Error), response.Error)
+	assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
+
+	server.Close()
 }
 
 func withSuccessDockerConnection() *dConnection {
@@ -401,21 +557,6 @@ func withErrorDockerConnection(errorMessage string) *dConnection {
 	}
 }
 
-func newDockerRequestPayload(jobName string, target string, containerName string) *RequestPayload {
-	return &RequestPayload{
-		Job:       jobName,
-		Container: containerName,
-		Target:    target,
-	}
-}
-
-func newDockerRequestPayloadNoTarget(jobName string, containerName string) *RequestPayloadNoTarget {
-	return &RequestPayloadNoTarget{
-		Job:       jobName,
-		Container: containerName,
-	}
-}
-
 func dockerPostCall(server *httptest.Server, details *RequestPayload, action string) (*ResponsePayload, error) {
 	requestBody, _ := json.Marshal(details)
 	url := server.URL + "/docker?action=" + action
@@ -423,16 +564,14 @@ func dockerPostCall(server *httptest.Server, details *RequestPayload, action str
 	return post(requestBody, url)
 }
 
-func dockerPostCallNoTarget(server *httptest.Server, details *RequestPayloadNoTarget, action string) (*ResponsePayload, error) {
+func dockerPostCallNoTarget(server *httptest.Server, details *RequestPayloadNoTarget, do string, action string) (*ResponsePayload, error) {
 	requestBody, _ := json.Marshal(details)
-	url := server.URL + "/docker?do=random&action=" + action
-
-	return post(requestBody, url)
-}
-
-func dockerPostCallNotImplementedDo(server *httptest.Server, details *RequestPayloadNoTarget, do string) (*ResponsePayload, error) {
-	requestBody, _ := json.Marshal(details)
-	url := server.URL + "/docker?do=" + do + "&action=start"
+	var url string
+	if do != "" {
+		url = fmt.Sprintf("%s/docker?do=%s&action=%s", server.URL, do, action)
+	} else {
+		url = fmt.Sprintf("%s/docker?action=%s", server.URL, action)
+	}
 
 	return post(requestBody, url)
 }
@@ -460,11 +599,23 @@ func newDockerJob(componentName string, targets ...string) *config.Job {
 	}
 }
 
-func dockerHTTPTestServer(jobMap map[string]*config.Job, connectionPool map[string]*dConnection, cache *cache.Manager) *httptest.Server {
+func dockerHTTPTestServerWithCacheItems(
+	jobMap map[string]*config.Job,
+	connectionPool map[string]*dConnection,
+	cacheManager *cache.Manager,
+	cacheItems map[string]func() (*proto.StatusResponse, error),
+) (*httptest.Server, error) {
+	for key, val := range cacheItems {
+		err := cacheManager.Register(key, val)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	dController := &DController{
 		jobs:           jobMap,
 		connectionPool: connectionPool,
-		cacheManager:   cache,
+		cacheManager:   cacheManager,
 		logger:         logger,
 	}
 
@@ -472,7 +623,8 @@ func dockerHTTPTestServer(jobMap map[string]*config.Job, connectionPool map[stri
 	router.HandleFunc("/docker", dController.DockerAction).
 		Queries("action", "{action}").
 		Methods("POST")
-	return httptest.NewServer(router)
+
+	return httptest.NewServer(router), nil
 }
 
 func getLogger() log.Logger {

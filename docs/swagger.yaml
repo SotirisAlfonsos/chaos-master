@@ -1,11 +1,129 @@
 basePath: /chaos/api/v1
+definitions:
+  docker.RequestPayload:
+    properties:
+      containerName:
+        type: string
+      job:
+        type: string
+      target:
+        type: string
+    type: object
+  docker.ResponsePayload:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+      status:
+        type: integer
+    type: object
+  service.RequestPayload:
+    properties:
+      job:
+        type: string
+      serviceName:
+        type: string
+      target:
+        type: string
+    type: object
+  service.ResponsePayload:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+      status:
+        type: integer
+    type: object
+  v1.Alert:
+    properties:
+      labels:
+        $ref: '#/definitions/v1.Labels'
+      status:
+        type: string
+    type: object
+  v1.Labels:
+    properties:
+      recoverAll:
+        type: boolean
+      recoverJob:
+        type: string
+      recoverTarget:
+        type: string
+    type: object
+  v1.RecoverMessage:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+      status:
+        type: string
+    type: object
+  v1.RecoverResponsePayload:
+    properties:
+      recoverMessages:
+        items:
+          $ref: '#/definitions/v1.RecoverMessage'
+        type: array
+      status:
+        type: integer
+    type: object
+  v1.requestPayload:
+    properties:
+      alerts:
+        items:
+          $ref: '#/definitions/v1.Alert'
+        type: array
+    type: object
 host: localhost:8090
 info:
   contact: {}
   description: This is the chaos master API.
-  title: Swagger API
+  title: Chaos Master API
   version: "1.0"
 paths:
+  /docker:
+    post:
+      consumes:
+      - application/json
+      description: Perform start or stop action on a container. If random is specified
+        you do not have to provide a target
+      parameters:
+      - description: Specify to perform action for container on random target
+        in: query
+        name: do
+        type: string
+      - description: Specify to perform a start or a stop on the specified container
+        in: query
+        name: action
+        required: true
+        type: string
+      - description: Specify the job name, container name and target
+        in: body
+        name: requestPayload
+        required: true
+        schema:
+          $ref: '#/definitions/docker.RequestPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/docker.ResponsePayload'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/docker.ResponsePayload'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/docker.ResponsePayload'
+      summary: Inject docker failures
+      tags:
+      - Failure injections
   /master/status:
     get:
       consumes:
@@ -24,5 +142,66 @@ paths:
             type: string
       summary: get master status
       tags:
-      - example
+      - Status
+  /recover/alertmanager:
+    post:
+      consumes:
+      - application/json
+      description: Alertmanager webhook to recover from failures
+      parameters:
+      - description: Create request payload that contains the recovery details
+        in: body
+        name: requestPayload
+        required: true
+        schema:
+          $ref: '#/definitions/v1.requestPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.RecoverResponsePayload'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/v1.RecoverResponsePayload'
+      summary: recover from failures
+      tags:
+      - Recover
+  /service:
+    post:
+      consumes:
+      - application/json
+      description: Perform start or stop action on a service
+      parameters:
+      - description: Specify to perform a start or a stop on the specified service
+        in: query
+        name: action
+        required: true
+        type: string
+      - description: Specify the job name, service name and target
+        in: body
+        name: requestPayload
+        required: true
+        schema:
+          $ref: '#/definitions/service.RequestPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.ResponsePayload'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/service.ResponsePayload'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/service.ResponsePayload'
+      summary: Inject service failures
+      tags:
+      - Failure injections
 swagger: "2.0"

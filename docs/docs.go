@@ -24,6 +24,65 @@ var doc = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/docker": {
+            "post": {
+                "description": "Perform start or stop action on a container. If random is specified you do not have to provide a target",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Failure injections"
+                ],
+                "summary": "Inject docker failures",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Specify to perform action for container on random target",
+                        "name": "do",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Specify to perform a start or a stop on the specified container",
+                        "name": "action",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "Specify the job name, container name and target",
+                        "name": "requestPayload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/docker.RequestPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/docker.ResponsePayload"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/docker.ResponsePayload"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/docker.ResponsePayload"
+                        }
+                    }
+                }
+            }
+        },
         "/master/status": {
             "get": {
                 "description": "Bot status",
@@ -34,7 +93,7 @@ var doc = `{
                     "application/json"
                 ],
                 "tags": [
-                    "example"
+                    "Status"
                 ],
                 "summary": "get master status",
                 "responses": {
@@ -49,6 +108,221 @@ var doc = `{
                         "schema": {
                             "type": "string"
                         }
+                    }
+                }
+            }
+        },
+        "/recover/alertmanager": {
+            "post": {
+                "description": "Alertmanager webhook to recover from failures",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Recover"
+                ],
+                "summary": "recover from failures",
+                "parameters": [
+                    {
+                        "description": "Create request payload that contains the recovery details",
+                        "name": "requestPayload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v1.requestPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v1.RecoverResponsePayload"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/v1.RecoverResponsePayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/service": {
+            "post": {
+                "description": "Perform start or stop action on a service",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Failure injections"
+                ],
+                "summary": "Inject service failures",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Specify to perform a start or a stop on the specified service",
+                        "name": "action",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "Specify the job name, service name and target",
+                        "name": "requestPayload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.RequestPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.ResponsePayload"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/service.ResponsePayload"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/service.ResponsePayload"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "docker.RequestPayload": {
+            "type": "object",
+            "properties": {
+                "containerName": {
+                    "type": "string"
+                },
+                "job": {
+                    "type": "string"
+                },
+                "target": {
+                    "type": "string"
+                }
+            }
+        },
+        "docker.ResponsePayload": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.RequestPayload": {
+            "type": "object",
+            "properties": {
+                "job": {
+                    "type": "string"
+                },
+                "serviceName": {
+                    "type": "string"
+                },
+                "target": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.ResponsePayload": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.Alert": {
+            "type": "object",
+            "properties": {
+                "labels": {
+                    "$ref": "#/definitions/v1.Labels"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "v1.Labels": {
+            "type": "object",
+            "properties": {
+                "recoverAll": {
+                    "type": "boolean"
+                },
+                "recoverJob": {
+                    "type": "string"
+                },
+                "recoverTarget": {
+                    "type": "string"
+                }
+            }
+        },
+        "v1.RecoverMessage": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "v1.RecoverResponsePayload": {
+            "type": "object",
+            "properties": {
+                "recoverMessages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.RecoverMessage"
+                    }
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v1.requestPayload": {
+            "type": "object",
+            "properties": {
+                "alerts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.Alert"
                     }
                 }
             }
@@ -71,7 +345,7 @@ var SwaggerInfo = swaggerInfo{
 	Host:        "localhost:8090",
 	BasePath:    "/chaos/api/v1",
 	Schemes:     []string{},
-	Title:       "Swagger API",
+	Title:       "Chaos Master API",
 	Description: "This is the chaos master API.",
 }
 

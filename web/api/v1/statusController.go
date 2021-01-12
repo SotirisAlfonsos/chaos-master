@@ -18,7 +18,7 @@ type Bots struct {
 // CalcExample godoc
 // @Summary get master status
 // @Description Bot status
-// @Tags example
+// @Tags Status
 // @Accept json
 // @Produce json
 // @Success 200 {string} string "Bots status"

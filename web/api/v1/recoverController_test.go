@@ -245,8 +245,11 @@ func (recoverR *RecoverResponsePayload) getSortedStatuses() []string {
 	return statuses
 }
 
-func defaultAPIRouterWithCacheItems(jobMap map[string]*config.Job, connections *network.Connections,
-	cacheItems map[string]func() (*proto.StatusResponse, error)) (*APIRouter, error) {
+func defaultAPIRouterWithCacheItems(
+	jobMap map[string]*config.Job,
+	connections *network.Connections,
+	cacheItems map[string]func() (*proto.StatusResponse, error),
+) (*APIRouter, error) {
 	apiRouter := NewAPIRouter(jobMap, connections, cache.NewCacheManager(logger), logger)
 
 	for key, val := range cacheItems {

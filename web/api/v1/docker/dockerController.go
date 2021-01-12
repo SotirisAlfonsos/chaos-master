@@ -106,6 +106,19 @@ func newDockerRequestNoTarget(details *RequestPayloadNoTarget) *proto.DockerRequ
 	}
 }
 
+// CalcExample godoc
+// @Summary Inject docker failures
+// @Description Perform start or stop action on a container. If random is specified you do not have to provide a target
+// @Tags Failure injections
+// @Accept json
+// @Produce json
+// @Param do query string false "Specify to perform action for container on random target"
+// @Param action query string true "Specify to perform a start or a stop on the specified container"
+// @Param requestPayload body RequestPayload true "Specify the job name, container name and target"
+// @Success 200 {object} ResponsePayload
+// @Failure 400 {object} ResponsePayload
+// @Failure 500 {object} ResponsePayload
+// @Router /docker [post]
 func (d *DController) DockerAction(w http.ResponseWriter, r *http.Request) {
 	do := r.FormValue("do")
 	if do != "" {
@@ -144,7 +157,7 @@ func (d *DController) DockerAction(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if !dockerExists {
-			response.badRequest(fmt.Sprintf("Container {%s} does not exist on target {%s}", requestPayload.Container, requestPayload.Target), d.logger)
+			response.badRequest(fmt.Sprintf("Container {%s} is not registered for target {%s}", requestPayload.Container, requestPayload.Target), d.logger)
 		}
 	} else {
 		response.badRequest(fmt.Sprintf("Could not find job {%s}", requestPayload.Job), d.logger)
@@ -153,8 +166,13 @@ func (d *DController) DockerAction(w http.ResponseWriter, r *http.Request) {
 	setResponseInWriter(w, response, d.logger)
 }
 
-func (d *DController) performAction(action action, dockerClient proto.DockerClient,
-	dockerRequest *proto.DockerRequest, target string, response *ResponsePayload) {
+func (d *DController) performAction(
+	action action,
+	dockerClient proto.DockerClient,
+	dockerRequest *proto.DockerRequest,
+	target string,
+	response *ResponsePayload,
+) {
 	var statusResponse *proto.StatusResponse
 	var err error
 
@@ -211,7 +229,13 @@ func (d *DController) randomDocker(w http.ResponseWriter, r *http.Request, do st
 	_ = level.Info(d.logger).Log("msg", fmt.Sprintf("%s any container", action))
 
 	if job, ok := d.jobs[requestPayloadNoTarget.Job]; ok {
-		target := getRandomTarget(job.Target)
+		target, err := getRandomTarget(job.Target)
+		if err != nil {
+			response.badRequest(fmt.Sprintf("Could not get random target for job {%s}. err: %s", requestPayloadNoTarget.Job, err.Error()), d.logger)
+			setResponseInWriter(w, response, d.logger)
+			return
+		}
+
 		if job.ComponentName == requestPayloadNoTarget.Container {
 			dockerRequest := newDockerRequestNoTarget(requestPayloadNoTarget)
 			d.performAction(action, d.connectionPool[target].dockerClient, dockerRequest, target, response)
@@ -243,8 +267,11 @@ func setResponseInWriter(w http.ResponseWriter, resp *ResponsePayload, logger lo
 	}
 }
 
-func getRandomTarget(targets []string) string {
-	return targets[rand.Intn(len(targets))]
+func getRandomTarget(targets []string) (string, error) {
+	if len(targets) > 0 {
+		return targets[rand.Intn(len(targets))], nil
+	}
+	return "", errors.New("No targets available")
 }
 
 func (d *DController) updateCache(dockerRequest *proto.DockerRequest, dockerClient proto.DockerClient, target string, action action) error {
