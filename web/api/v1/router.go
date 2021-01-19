@@ -19,8 +19,12 @@ type APIRouter struct {
 	logger      log.Logger
 }
 
-func NewAPIRouter(jobMap map[string]*config.Job, connections *network.Connections,
-	cache *cache.Manager, logger log.Logger) *APIRouter {
+func NewAPIRouter(
+	jobMap map[string]*config.Job,
+	connections *network.Connections,
+	cache *cache.Manager,
+	logger log.Logger,
+) *APIRouter {
 	return &APIRouter{
 		jobMap:      jobMap,
 		connections: connections,

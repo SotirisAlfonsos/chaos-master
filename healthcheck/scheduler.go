@@ -20,16 +20,16 @@ type HealthChecker struct {
 }
 
 type Details struct {
-	Status           proto.HealthCheckResponse_ServingStatus
-	HealthClientConn proto.HealthClient
+	Status     proto.HealthCheckResponse_ServingStatus
+	connection network.Connection
 }
 
 func Register(connections *network.Connections, logger log.Logger) *HealthChecker {
 	healthChecker := &HealthChecker{DetailsMap: make(map[string]*Details), logger: logger}
 	for target, connection := range connections.Pool {
 		healthChecker.DetailsMap[target] = &Details{
-			Status:           proto.HealthCheckResponse_UNKNOWN,
-			HealthClientConn: proto.NewHealthClient(connection),
+			Status:     proto.HealthCheckResponse_UNKNOWN,
+			connection: connection,
 		}
 	}
 
@@ -40,7 +40,14 @@ func (hch *HealthChecker) Start(report bool) {
 	c := cron.New()
 	id, err := c.AddFunc("@every 1m", func() {
 		for target, details := range hch.DetailsMap {
-			client := details.HealthClientConn
+			client, err := details.connection.GetHealthClient(target)
+			if err != nil {
+				_ = level.Error(hch.logger).Log(
+					"msg", fmt.Sprintf("Can not get healthcheck connection for target {%s}", target),
+					"err", err)
+				continue
+			}
+
 			resp, err := client.Check(context.Background(), &proto.HealthCheckRequest{})
 			if err != nil {
 				_ = level.Error(hch.logger).Log(

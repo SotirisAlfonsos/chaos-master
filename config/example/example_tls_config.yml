@@ -1,0 +1,20 @@
+api_options:
+  port: 8090
+  scheme: http
+
+jobs:
+  - job_name: "zookeeper"
+    type: "Docker"
+    component_name: "zookeeper"
+    targets: ['127.0.0.1:8083', '127.0.0.1:8081']
+  - job_name: "zookeeper service"
+    type: "Service"
+    component_name: "simple"
+    targets: ['127.0.0.1:8082', '127.0.0.1:8081']
+
+bots:
+  ca_cert: "config/test/certs/ca-cert.pem"
+  public_cert: "config/test/certs/server-cert.pem"
+  peer_token: 30028dd6-a641-4ac3-91d8-1e214ac5e6f6
+
+health_check_report: true

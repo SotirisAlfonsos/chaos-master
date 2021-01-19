@@ -15,7 +15,6 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 )
 
 type DController struct {
@@ -26,8 +25,7 @@ type DController struct {
 }
 
 type dConnection struct {
-	grpcConn     *grpc.ClientConn
-	dockerClient proto.DockerClient
+	connection network.Connection
 }
 
 type action int
@@ -52,13 +50,16 @@ func toActionEnum(value string) (action, error) {
 	return notImplemented, errors.New(fmt.Sprintf("The action {%s} is not supported", value))
 }
 
-func NewDockerController(jobs map[string]*config.Job, connections *network.Connections,
-	cache *cache.Manager, logger log.Logger) *DController {
+func NewDockerController(
+	jobs map[string]*config.Job,
+	connections *network.Connections,
+	cache *cache.Manager,
+	logger log.Logger,
+) *DController {
 	connPool := make(map[string]*dConnection)
-	for target, grpcConn := range connections.Pool {
+	for target, connection := range connections.Pool {
 		connPool[target] = &dConnection{
-			grpcConn:     grpcConn,
-			dockerClient: proto.NewDockerClient(grpcConn),
+			connection: connection,
 		}
 	}
 	return &DController{
@@ -151,7 +152,7 @@ func (d *DController) DockerAction(w http.ResponseWriter, r *http.Request) {
 		for _, target := range job.Target {
 			if job.ComponentName == requestPayload.Container && target == requestPayload.Target {
 				dockerRequest := newDockerRequest(requestPayload)
-				d.performAction(action, d.connectionPool[target].dockerClient, dockerRequest, requestPayload.Target, response)
+				d.performAction(action, d.connectionPool[target], dockerRequest, requestPayload.Target, response)
 				dockerExists = true
 			}
 		}
@@ -168,13 +169,20 @@ func (d *DController) DockerAction(w http.ResponseWriter, r *http.Request) {
 
 func (d *DController) performAction(
 	action action,
-	dockerClient proto.DockerClient,
+	dConnection *dConnection,
 	dockerRequest *proto.DockerRequest,
 	target string,
 	response *ResponsePayload,
 ) {
 	var statusResponse *proto.StatusResponse
 	var err error
+
+	dockerClient, err := dConnection.connection.GetDockerClient(target)
+	if err != nil {
+		err = errors.Wrap(err, fmt.Sprintf("Can not get docker connection from target {%s}", target))
+		response.internalServerError(err.Error(), d.logger)
+		return
+	}
 
 	switch action {
 	case start:
@@ -238,7 +246,7 @@ func (d *DController) randomDocker(w http.ResponseWriter, r *http.Request, do st
 
 		if job.ComponentName == requestPayloadNoTarget.Container {
 			dockerRequest := newDockerRequestNoTarget(requestPayloadNoTarget)
-			d.performAction(action, d.connectionPool[target].dockerClient, dockerRequest, target, response)
+			d.performAction(action, d.connectionPool[target], dockerRequest, target, response)
 		} else {
 			response.badRequest(fmt.Sprintf("Could not find container name {%s}", requestPayloadNoTarget.Container), d.logger)
 		}

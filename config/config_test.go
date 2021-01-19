@@ -28,6 +28,7 @@ func TestShouldUnmarshalSimpleConfig(t *testing.T) {
 	assert.Equal(t, "zookeeper docker", config.JobsFromConfig[0].JobName, "the correct first job name from the file")
 	assert.Equal(t, "zookeeper service", config.JobsFromConfig[1].JobName, "the correct second job name from the file")
 	assert.Equal(t, "zookeeper service", config.JobsFromConfig[2].JobName, "the correct third job name from the file")
+	assert.Equal(t, "1234", config.Bots.PeerToken, "the peer token for the communication with the bots")
 }
 
 func TestShouldUnmarshalConfigWIthMissingDefaultValues(t *testing.T) {

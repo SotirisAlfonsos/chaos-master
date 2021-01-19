@@ -35,9 +35,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	connections := network.GetConnectionPool(conf.JobsFromConfig, logger)
+	connections := network.GetConnectionPool(conf, logger)
 	jobMap := conf.GetJobMap(logger)
-	showRegisteredJobs(jobMap, logger)
 
 	healthChecker := healthcheck.Register(connections, logger)
 	healthChecker.Start(conf.HealthCheckReport)
@@ -54,11 +53,4 @@ func createLogger(debugLevel string) log.Logger {
 	}
 
 	return chaoslogger.New(allowLevel)
-}
-
-func showRegisteredJobs(jobsMap map[string]*config.Job, logger log.Logger) {
-	for jobName, job := range jobsMap {
-		_ = level.Info(logger).Log("msg", fmt.Sprintf("{%s} job registered for component {%s} type {%s} and targets %v",
-			jobName, job.ComponentName, job.FailureType, job.Target))
-	}
 }

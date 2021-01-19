@@ -16,4 +16,7 @@ jobs:
     component_name: "simple"
     targets: ['127.0.0.1:8081']
 
+bots:
+  peer_token: 1234
+
 health_check_report: true

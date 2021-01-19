@@ -56,6 +56,39 @@ func (msc *mockDockerClient) Stop(ctx context.Context, in *proto.DockerRequest, 
 	return msc.Status, msc.Error
 }
 
+type connection struct {
+	status *proto.StatusResponse
+	err    error
+}
+
+func (connection *connection) GetServiceClient(target string) (proto.ServiceClient, error) {
+	return nil, nil
+}
+
+func (connection *connection) GetDockerClient(target string) (proto.DockerClient, error) {
+	return GetMockDockerClient(connection.status, connection.err), nil
+}
+
+func (connection *connection) GetHealthClient(target string) (proto.HealthClient, error) {
+	return nil, nil
+}
+
+type failedConnection struct {
+	err error
+}
+
+func (failedConnection *failedConnection) GetServiceClient(target string) (proto.ServiceClient, error) {
+	return nil, nil
+}
+
+func (failedConnection *failedConnection) GetDockerClient(target string) (proto.DockerClient, error) {
+	return nil, failedConnection.err
+}
+
+func (failedConnection *failedConnection) GetHealthClient(target string) (proto.HealthClient, error) {
+	return nil, nil
+}
+
 func TestStartDockerSuccess(t *testing.T) {
 	dataItems := []TestData{
 		{
@@ -219,6 +252,27 @@ func TestDockerActionFailure(t *testing.T) {
 	t.Log("Action stop")
 	for _, dataItem := range dataItems {
 		assertActionPerformed(t, dataItem, "stop")
+	}
+}
+
+func TestServiceActionWithNoGrpcConnectionToTarget(t *testing.T) {
+	dataItems := []TestData{
+		{
+			message: "Should receive bad request and not update cache if the action to perform is invalid",
+			jobMap: map[string]*config.Job{
+				"job name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*dConnection{
+				"127.0.0.1": withFailureToSetDockerConnection("Can not dial target"),
+			},
+			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: internalServerErrorResponse("Can not get docker connection from target {127.0.0.1}: Can not dial target")},
+		},
+	}
+
+	t.Log("Action start")
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "start")
 	}
 }
 
@@ -533,27 +587,34 @@ func assertRandomActionPerformed(t *testing.T, dataItem TestDataForRandomDocker,
 }
 
 func withSuccessDockerConnection() *dConnection {
+	connection := &connection{status: new(proto.StatusResponse), err: nil}
 	return &dConnection{
-		grpcConn:     nil,
-		dockerClient: GetMockDockerClient(new(proto.StatusResponse), nil),
+		connection: connection,
 	}
 }
 
 func withFailureDockerConnection() *dConnection {
 	statusResponse := new(proto.StatusResponse)
 	statusResponse.Status = proto.StatusResponse_FAIL
+	connection := &connection{status: statusResponse, err: nil}
 	return &dConnection{
-		grpcConn:     nil,
-		dockerClient: GetMockDockerClient(statusResponse, nil),
+		connection: connection,
 	}
 }
 
 func withErrorDockerConnection(errorMessage string) *dConnection {
 	statusResponse := new(proto.StatusResponse)
 	statusResponse.Status = proto.StatusResponse_FAIL
+	connection := &connection{status: statusResponse, err: errors.New(errorMessage)}
 	return &dConnection{
-		grpcConn:     nil,
-		dockerClient: GetMockDockerClient(statusResponse, errors.New(errorMessage)),
+		connection: connection,
+	}
+}
+
+func withFailureToSetDockerConnection(errorMessage string) *dConnection {
+	connection := &failedConnection{err: errors.New(errorMessage)}
+	return &dConnection{
+		connection: connection,
 	}
 }
 
@@ -594,7 +655,7 @@ func post(requestBody []byte, url string) (*ResponsePayload, error) {
 func newDockerJob(componentName string, targets ...string) *config.Job {
 	return &config.Job{
 		ComponentName: componentName,
-		FailureType:   config.Service,
+		FailureType:   config.Docker,
 		Target:        targets,
 	}
 }

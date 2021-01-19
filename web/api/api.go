@@ -58,8 +58,12 @@ type Options struct {
 	logger         log.Logger
 }
 
-func NewAPIOptions(restAPIOptions *config.RestAPIOptions, jobMap map[string]*config.Job,
-	connections *network.Connections, logger log.Logger) *Options {
+func NewAPIOptions(
+	restAPIOptions *config.RestAPIOptions,
+	jobMap map[string]*config.Job,
+	connections *network.Connections,
+	logger log.Logger,
+) *Options {
 	return &Options{
 		restAPIOptions: restAPIOptions,
 		jobMap:         jobMap,

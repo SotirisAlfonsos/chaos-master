@@ -14,6 +14,7 @@ import (
 type Config struct {
 	APIOptions        *RestAPIOptions   `yaml:"api_options"`
 	JobsFromConfig    []*JobsFromConfig `yaml:"jobs,flow"`
+	Bots              *Bots             `yaml:"bots,flow"`
 	HealthCheckReport bool              `yaml:"health_check_report,flow"`
 }
 
@@ -27,6 +28,12 @@ type JobsFromConfig struct {
 	FailureType   FailureType `yaml:"type"`
 	ComponentName string      `yaml:"component_name"`
 	Targets       []string    `yaml:"targets,omitempty"`
+}
+
+type Bots struct {
+	CACert     string `yaml:"ca_cert,omitempty"`
+	PublicCert string `yaml:"public_cert,omitempty"`
+	PeerToken  string `yaml:"peer_token"`
 }
 
 type FailureType string
@@ -97,6 +104,8 @@ func (config *Config) GetJobMap(logger log.Logger) map[string]*Job {
 		configJobs.addToJobsMap(jobs, logger)
 	}
 
+	showRegisteredJobs(jobs, logger)
+
 	return jobs
 }
 
@@ -109,5 +118,12 @@ func (cj *JobsFromConfig) addToJobsMap(jobs map[string]*Job, logger log.Logger) 
 			FailureType:   cj.FailureType,
 			Target:        cj.Targets,
 		}
+	}
+}
+
+func showRegisteredJobs(jobsMap map[string]*Job, logger log.Logger) {
+	for jobName, job := range jobsMap {
+		_ = level.Info(logger).Log("msg", fmt.Sprintf("{%s} job registered for component {%s} type {%s} and targets %v",
+			jobName, job.ComponentName, job.FailureType, job.Target))
 	}
 }

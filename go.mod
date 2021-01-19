@@ -13,6 +13,7 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/swaggo/http-swagger v1.0.0
 	github.com/swaggo/swag v1.7.0
+	golang.org/x/oauth2 v0.0.0-20190226205417-e64efc72b421
 	google.golang.org/grpc v1.34.0
 	gopkg.in/yaml.v2 v2.4.0
 )

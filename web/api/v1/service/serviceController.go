@@ -14,7 +14,6 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 )
 
 type SController struct {
@@ -25,17 +24,19 @@ type SController struct {
 }
 
 type sConnection struct {
-	grpcConn      *grpc.ClientConn
-	serviceClient proto.ServiceClient
+	connection network.Connection
 }
 
-func NewServiceController(jobs map[string]*config.Job, connections *network.Connections,
-	cache *cache.Manager, logger log.Logger) *SController {
+func NewServiceController(
+	jobs map[string]*config.Job,
+	connections *network.Connections,
+	cache *cache.Manager,
+	logger log.Logger,
+) *SController {
 	connPool := make(map[string]*sConnection)
-	for target, grpcConn := range connections.Pool {
+	for target, connection := range connections.Pool {
 		connPool[target] = &sConnection{
-			grpcConn:      grpcConn,
-			serviceClient: proto.NewServiceClient(grpcConn),
+			connection: connection,
 		}
 	}
 	return &SController{
@@ -128,13 +129,13 @@ func (s *SController) ServiceAction(w http.ResponseWriter, r *http.Request) {
 		for _, target := range job.Target {
 			if target == requestPayload.Target && job.ComponentName == requestPayload.ServiceName {
 				serviceRequest := newServiceRequest(requestPayload)
-				s.performAction(action, s.connectionPool[target].serviceClient, serviceRequest, requestPayload, response)
+				s.performAction(action, s.connectionPool[target], serviceRequest, requestPayload, response)
 				serviceExists = true
 			}
 		}
 
 		if !serviceExists {
-			response.badRequest(fmt.Sprintf("Service {%s} does not exist on target {%s}", requestPayload.ServiceName, requestPayload.Target), s.logger)
+			response.badRequest(fmt.Sprintf("Service {%s} is not registered for target {%s}", requestPayload.ServiceName, requestPayload.Target), s.logger)
 		}
 	} else {
 		response.badRequest(fmt.Sprintf("Could not find job {%s}", requestPayload.Job), s.logger)
@@ -143,10 +144,22 @@ func (s *SController) ServiceAction(w http.ResponseWriter, r *http.Request) {
 	setResponseInWriter(w, response, s.logger)
 }
 
-func (s *SController) performAction(action action, serviceClient proto.ServiceClient,
-	serviceRequest *proto.ServiceRequest, details *RequestPayload, response *ResponsePayload) {
+func (s *SController) performAction(
+	action action,
+	sConnection *sConnection,
+	serviceRequest *proto.ServiceRequest,
+	details *RequestPayload,
+	response *ResponsePayload,
+) {
 	var statusResponse *proto.StatusResponse
 	var err error
+
+	serviceClient, err := sConnection.connection.GetServiceClient(details.Target)
+	if err != nil {
+		err = errors.Wrap(err, fmt.Sprintf("Can not get service connection from target {%s}", details.Target))
+		response.internalServerError(err.Error(), s.logger)
+		return
+	}
 
 	switch action {
 	case start:

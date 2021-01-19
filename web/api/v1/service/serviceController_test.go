@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +15,7 @@ import (
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/go-kit/kit/log"
 	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )
@@ -23,6 +23,20 @@ import (
 var (
 	logger = getLogger()
 )
+
+type TestData struct {
+	message        string
+	jobMap         map[string]*config.Job
+	connectionPool map[string]*sConnection
+	cacheItems     map[string]func() (*proto.StatusResponse, error)
+	requestPayload *RequestPayload
+	expected       *expectedResult
+}
+
+type expectedResult struct {
+	cacheSize int
+	payload   *ResponsePayload
+}
 
 type mockServiceClient struct {
 	Status *proto.StatusResponse
@@ -41,279 +55,335 @@ func (msc *mockServiceClient) Stop(ctx context.Context, in *proto.ServiceRequest
 	return msc.Status, msc.Error
 }
 
+type connection struct {
+	status *proto.StatusResponse
+	err    error
+}
+
+func (connection *connection) GetServiceClient(target string) (proto.ServiceClient, error) {
+	return GetMockServiceClient(connection.status, connection.err), nil
+}
+
+func (connection *connection) GetDockerClient(target string) (proto.DockerClient, error) {
+	return nil, nil
+}
+
+func (connection *connection) GetHealthClient(target string) (proto.HealthClient, error) {
+	return nil, nil
+}
+
+type failedConnection struct {
+	err error
+}
+
+func (failedConnection *failedConnection) GetServiceClient(target string) (proto.ServiceClient, error) {
+	return nil, failedConnection.err
+}
+
+func (failedConnection *failedConnection) GetDockerClient(target string) (proto.DockerClient, error) {
+	return nil, nil
+}
+
+func (failedConnection *failedConnection) GetHealthClient(target string) (proto.HealthClient, error) {
+	return nil, nil
+}
+
 func TestStartServiceSuccess(t *testing.T) {
-	var jobName = "jobName"
-	var serviceName = "serviceName"
-	var target = "target"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*sConnection)
-
-	connectionPool[target] = withSuccessServiceConnection()
-	connectionPool["wrong target"] = withFailureServiceConnection()
-	jobMap[jobName] = newServiceJob(serviceName, target, "wrong target")
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := serviceHttpTestServer(jobMap, connectionPool, cacheManager)
-	defer server.Close()
-
-	details := newServiceRequestPayload(jobName, target, serviceName)
-
-	response, err := servicePostCall(server, details, "start")
-	if err != nil {
-		t.Fatal(err)
+	dataItems := []TestData{
+		{
+			message: "Successfully start single container with specific job, name and target",
+			jobMap: map[string]*config.Job{
+				"job name":           newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*sConnection{
+				"127.0.0.1": withSuccessServiceConnection(),
+				"127.0.0.2": withSuccessServiceConnection(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+		},
+		{
+			message: "Successfully start single container with specific job, name and target and remove it from the cache",
+			jobMap: map[string]*config.Job{
+				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*sConnection{
+				"127.0.0.1": withSuccessServiceConnection(),
+			},
+			cacheItems: map[string]func() (*proto.StatusResponse, error){
+				"job name,service name,127.0.0.1": functionWithSuccessResponse(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+		},
 	}
 
-	assert.Equal(t, 200, response.Status)
-	assert.Equal(t, fmt.Sprintf("Response from target {%s}, {}, {SUCCESS}", target), response.Message)
-	assert.Equal(t, "", response.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "start")
+	}
 }
 
 func TestStopServiceSuccess(t *testing.T) {
-	var jobName = "jobName"
-	var serviceName = "serviceName"
-	var target = "target"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*sConnection)
-
-	connectionPool[target] = withSuccessServiceConnection()
-	connectionPool["wrong target"] = withErrorServiceConnection("error message")
-	jobMap[jobName] = newServiceJob(serviceName, target, "wrong target")
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := serviceHttpTestServer(jobMap, connectionPool, cacheManager)
-	defer server.Close()
-
-	details := newServiceRequestPayload(jobName, target, serviceName)
-
-	response, err := servicePostCall(server, details, "stop")
-	if err != nil {
-		t.Fatal(err)
+	dataItems := []TestData{
+		{
+			message: "Successfully stop single service with specific job, name and target and add it in cache",
+			jobMap: map[string]*config.Job{
+				"job name":           newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*sConnection{
+				"127.0.0.1": withSuccessServiceConnection(),
+				"127.0.0.2": withSuccessServiceConnection(),
+			},
+			cacheItems: map[string]func() (*proto.StatusResponse, error){
+				"job name,service name,127.0.0.2": functionWithSuccessResponse(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 2, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+		},
+		{
+			message: "Successfully stop single service with specific job, name and target and dont add it in cache if already exists",
+			jobMap: map[string]*config.Job{
+				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*sConnection{
+				"127.0.0.1": withSuccessServiceConnection(),
+			},
+			cacheItems: map[string]func() (*proto.StatusResponse, error){
+				"job name,service name,127.0.0.1": functionWithSuccessResponse(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+		},
 	}
 
-	assert.Equal(t, 200, response.Status)
-	assert.Equal(t, fmt.Sprintf("Response from target {%s}, {}, {SUCCESS}", target), response.Message)
-	assert.Equal(t, "", response.Error)
-	assert.Equal(t, 1, cacheManager.ItemCount())
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "stop")
+	}
 }
 
-func TestStartServiceOneOfServiceNameOrTargetNotExist(t *testing.T) {
-	var jobName = "jobName"
-	var serviceName = "serviceName"
-	var differentServiceName = "different name"
-	var target = "target"
-	var differentTarget = "different target"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*sConnection)
-
-	connectionPool[target] = withSuccessServiceConnection()
-	jobMap[jobName] = newServiceJob(serviceName, target)
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := serviceHttpTestServer(jobMap, connectionPool, cacheManager)
-	defer server.Close()
-
-	details := newServiceRequestPayload(jobName, target, differentServiceName)
-
-	responseStart, err := servicePostCall(server, details, "start")
-	if err != nil {
-		t.Fatal(err)
+func TestServiceActionOneOfJobContainerNameTargetDoesNotExist(t *testing.T) {
+	dataItems := []TestData{
+		{
+			message: "Should receive bad request and not update cache for action when job name does not exist",
+			jobMap: map[string]*config.Job{
+				"job name":           newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*sConnection{
+				"127.0.0.1": withSuccessServiceConnection(),
+			},
+			requestPayload: &RequestPayload{Job: "job name does not exist", ServiceName: "service name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("Could not find job {job name does not exist}")},
+		},
+		{
+			message: "Should receive bad request and not update cache for action when service name does not exist for target",
+			jobMap: map[string]*config.Job{
+				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*sConnection{
+				"127.0.0.1": withSuccessServiceConnection(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name does not exist", Target: "127.0.0.1"},
+			expected: &expectedResult{
+				cacheSize: 0,
+				payload:   badRequestResponse("Service {service name does not exist} is not registered for target {127.0.0.1}"),
+			},
+		},
+		{
+			message: "Should receive bad request and not update cache for action when target does not exist for the job and service specified",
+			jobMap: map[string]*config.Job{
+				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*sConnection{
+				"127.0.0.1": withSuccessServiceConnection(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "0.0.0.0"},
+			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("Service {service name} is not registered for target {0.0.0.0}")},
+		},
 	}
 
-	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", differentServiceName, target), responseStart.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
-
-	details = newServiceRequestPayload(jobName, differentTarget, serviceName)
-
-	responseStop, err := servicePostCall(server, details, "stop")
-	if err != nil {
-		t.Fatal(err)
+	t.Log("Action start")
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "start")
 	}
 
-	assert.Equal(t, 400, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Service {%s} does not exist on target {%s}", serviceName, differentTarget), responseStop.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
+	t.Log("Action stop")
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "stop")
+	}
 }
 
-func TestStartStopServiceJobDoesNotExist(t *testing.T) {
-	var jobName = "jobName"
-	var serviceName = "serviceName"
-	var jobToStart = "different target"
-	var target = "target"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*sConnection)
-
-	connectionPool[target] = withSuccessServiceConnection()
-	jobMap[jobName] = newServiceJob(serviceName, target)
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := serviceHttpTestServer(jobMap, connectionPool, cacheManager)
-	defer server.Close()
-
-	details := newServiceRequestPayload(jobToStart, target, serviceName)
-
-	responseStart, err := servicePostCall(server, details, "start")
-	if err != nil {
-		t.Fatal(err)
+func TestServiceActionFailure(t *testing.T) {
+	dataItems := []TestData{
+		{
+			message: "Should receive internal server error and not update cache if the request fails on bot",
+			jobMap: map[string]*config.Job{
+				"job name":           newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*sConnection{
+				"127.0.0.1": withFailureServiceConnection(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: internalServerErrorResponse("Failure response from target {127.0.0.1}")},
+		},
+		{
+			message: "Should receive internal server error and not update cache if the request errors on bot",
+			jobMap: map[string]*config.Job{
+				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*sConnection{
+				"127.0.0.1": withErrorServiceConnection("error occurred"),
+			},
+			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
+			expected: &expectedResult{
+				cacheSize: 0, payload: internalServerErrorResponse("Error response from target {127.0.0.1}: error occurred")},
+		},
 	}
 
-	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Could not find job {%s}", jobToStart), responseStart.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
-
-	responseStop, err := servicePostCall(server, details, "stop")
-	if err != nil {
-		t.Fatal(err)
+	t.Log("Action start")
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "start")
 	}
 
-	assert.Equal(t, 400, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Could not find job {%s}", jobToStart), responseStop.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
+	t.Log("Action stop")
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "stop")
+	}
 }
 
-func TestStartStopServiceWithFailureResponseFromBot(t *testing.T) {
-	var jobName = "jobName"
-	var serviceName = "serviceName"
-	var target = "target"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*sConnection)
-
-	connectionPool[target] = withFailureServiceConnection()
-	jobMap[jobName] = newServiceJob(serviceName, target)
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := serviceHttpTestServer(jobMap, connectionPool, cacheManager)
-	defer server.Close()
-
-	details := newServiceRequestPayload(jobName, target, serviceName)
-
-	responseStart, err := servicePostCall(server, details, "start")
-	if err != nil {
-		t.Fatal(err)
+func TestServiceActionWithNoGrpcConnectionToTarget(t *testing.T) {
+	dataItems := []TestData{
+		{
+			message: "Should receive bad request and not update cache if the action to perform is invalid",
+			jobMap: map[string]*config.Job{
+				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*sConnection{
+				"127.0.0.1": withFailureToSetServiceConnection("Can not dial target"),
+			},
+			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: internalServerErrorResponse("Can not get service connection from target {127.0.0.1}: Can not dial target")},
+		},
 	}
 
-	assert.Equal(t, 500, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Failure response from target {%s}", target), responseStart.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
-
-	responseStop, err := servicePostCall(server, details, "stop")
-	if err != nil {
-		t.Fatal(err)
+	t.Log("Action start")
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "start")
 	}
-
-	assert.Equal(t, 500, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Failure response from target {%s}", target), responseStop.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
-}
-
-func TestStartStopServiceWithErrorResponseFromBot(t *testing.T) {
-	var jobName = "jobName"
-	var serviceName = "serviceName"
-	var target = "target"
-	var errorMessage = "error message"
-
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*sConnection)
-
-	connectionPool[target] = withErrorServiceConnection(errorMessage)
-	jobMap[jobName] = newServiceJob(serviceName, target)
-
-	cacheManager := cache.NewCacheManager(logger)
-
-	server := serviceHttpTestServer(jobMap, connectionPool, cacheManager)
-	defer server.Close()
-
-	details := newServiceRequestPayload(jobName, target, serviceName)
-
-	responseStart, err := servicePostCall(server, details, "start")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, 500, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("Error response from target {%s}: %s", target, errorMessage), responseStart.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
-
-	responseStop, err := servicePostCall(server, details, "stop")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, 500, responseStop.Status)
-	assert.Equal(t, fmt.Sprintf("Error response from target {%s}: %s", target, errorMessage), responseStop.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
 }
 
 func TestServiceWithInvalidAction(t *testing.T) {
-	var jobName = "jobName"
-	var serviceName = "serviceName"
-	var target = "target"
+	dataItems := []TestData{
+		{
+			message: "Should receive bad request and not update cache if the action to perform is invalid",
+			jobMap: map[string]*config.Job{
+				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+			},
+			connectionPool: map[string]*sConnection{
+				"127.0.0.1": withSuccessServiceConnection(),
+			},
+			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("The action {invalidAction} is not supported")},
+		},
+	}
 
-	jobMap := make(map[string]*config.Job)
-	connectionPool := make(map[string]*sConnection)
+	t.Log("Action invalidAction")
+	for _, dataItem := range dataItems {
+		assertActionPerformed(t, dataItem, "invalidAction")
+	}
+}
 
-	connectionPool[target] = withSuccessServiceConnection()
-	jobMap[jobName] = newServiceJob(serviceName, target)
+func assertActionPerformed(t *testing.T, dataItem TestData, action string) {
+	t.Log(dataItem.message)
 
 	cacheManager := cache.NewCacheManager(logger)
-
-	server := serviceHttpTestServer(jobMap, connectionPool, cacheManager)
-	defer server.Close()
-
-	details := newServiceRequestPayload(jobName, target, serviceName)
-
-	responseStart, err := servicePostCall(server, details, "invalidAction")
+	server, err := serviceHTTPTestServerWithCacheItems(dataItem.jobMap, dataItem.connectionPool, cacheManager, dataItem.cacheItems)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, 400, responseStart.Status)
-	assert.Equal(t, fmt.Sprintf("The action {%s} is not supported", "invalidAction"), responseStart.Error)
-	assert.Equal(t, 0, cacheManager.ItemCount())
+	response, err := servicePostCall(server, dataItem.requestPayload, action)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, dataItem.expected.payload.Status, response.Status)
+	assert.Equal(t, dataItem.expected.payload.Message, response.Message)
+	assert.Equal(t, dataItem.expected.payload.Error, response.Error)
+	assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
+
+	server.Close()
+}
+
+func newServiceJob(componentName string, targets ...string) *config.Job {
+	return &config.Job{
+		ComponentName: componentName,
+		FailureType:   config.Service,
+		Target:        targets,
+	}
 }
 
 func withSuccessServiceConnection() *sConnection {
+	connection := &connection{status: new(proto.StatusResponse), err: nil}
 	return &sConnection{
-		grpcConn:      nil,
-		serviceClient: GetMockServiceClient(new(proto.StatusResponse), nil),
+		connection: connection,
 	}
 }
 
 func withFailureServiceConnection() *sConnection {
 	statusResponse := new(proto.StatusResponse)
 	statusResponse.Status = proto.StatusResponse_FAIL
+	connection := &connection{status: statusResponse, err: nil}
 	return &sConnection{
-		grpcConn:      nil,
-		serviceClient: GetMockServiceClient(statusResponse, nil),
+		connection: connection,
 	}
 }
 
 func withErrorServiceConnection(errorMessage string) *sConnection {
 	statusResponse := new(proto.StatusResponse)
 	statusResponse.Status = proto.StatusResponse_FAIL
+	connection := &connection{status: statusResponse, err: errors.New(errorMessage)}
 	return &sConnection{
-		grpcConn:      nil,
-		serviceClient: GetMockServiceClient(statusResponse, errors.New(errorMessage)),
+		connection: connection,
 	}
 }
 
-func newServiceRequestPayload(jobName string, target string, serviceName string) *RequestPayload {
-	return &RequestPayload{
-		Job:         jobName,
-		ServiceName: serviceName,
-		Target:      target,
+func withFailureToSetServiceConnection(errorMessage string) *sConnection {
+	connection := &failedConnection{err: errors.New(errorMessage)}
+	return &sConnection{
+		connection: connection,
 	}
+}
+
+func serviceHTTPTestServerWithCacheItems(
+	jobMap map[string]*config.Job,
+	connectionPool map[string]*sConnection,
+	cacheManager *cache.Manager,
+	cacheItems map[string]func() (*proto.StatusResponse, error),
+) (*httptest.Server, error) {
+	for key, val := range cacheItems {
+		err := cacheManager.Register(key, val)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	sController := &SController{
+		jobs:           jobMap,
+		connectionPool: connectionPool,
+		cacheManager:   cacheManager,
+		logger:         logger,
+	}
+
+	router := mux.NewRouter()
+	router.HandleFunc("/service", sController.ServiceAction).
+		Queries("action", "{action}").
+		Methods("POST")
+
+	return httptest.NewServer(router), nil
 }
 
 func servicePostCall(server *httptest.Server, details *RequestPayload, action string) (*ResponsePayload, error) {
@@ -338,27 +408,31 @@ func post(requestBody []byte, url string) (*ResponsePayload, error) {
 	return response, nil
 }
 
-func newServiceJob(componentName string, targets ...string) *config.Job {
-	return &config.Job{
-		ComponentName: componentName,
-		FailureType:   config.Service,
-		Target:        targets,
+func okResponse(message string) *ResponsePayload {
+	return &ResponsePayload{
+		Message: message,
+		Status:  200,
 	}
 }
 
-func serviceHttpTestServer(jobMap map[string]*config.Job, connectionPool map[string]*sConnection, cache *cache.Manager) *httptest.Server {
-	sController := &SController{
-		jobs:           jobMap,
-		connectionPool: connectionPool,
-		cacheManager:   cache,
-		logger:         logger,
+func badRequestResponse(error string) *ResponsePayload {
+	return &ResponsePayload{
+		Error:  error,
+		Status: 400,
 	}
+}
 
-	router := mux.NewRouter()
-	router.HandleFunc("/service", sController.ServiceAction).
-		Queries("action", "{action}").
-		Methods("POST")
-	return httptest.NewServer(router)
+func internalServerErrorResponse(error string) *ResponsePayload {
+	return &ResponsePayload{
+		Error:  error,
+		Status: 500,
+	}
+}
+
+func functionWithSuccessResponse() func() (*proto.StatusResponse, error) {
+	return func() (*proto.StatusResponse, error) {
+		return &proto.StatusResponse{Status: proto.StatusResponse_SUCCESS}, nil
+	}
 }
 
 func getLogger() log.Logger {

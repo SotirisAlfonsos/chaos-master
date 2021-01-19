@@ -1,43 +1,89 @@
 #!/bin/bash
 
-printf %"s\n" "------------ Init start service and container ------------"
-curl -X POST "http://127.0.0.1:8090/chaos/api/v1/service?action=start" \
--H "Content-Type: application/json" \
--d '{"job": "zookeeper service", "serviceName": "simple", "target": "127.0.0.1:8081"}'
+verifyOK () {
+  if ((!$#)); then
+    printf "\n"%"s\n" "------------ E2e test FAILURE ------------"
+    exit 1
+  fi
+}
 
-curl -X POST "http://127.0.0.1:8090/chaos/api/v1/docker?action=start" \
--H "Content-Type: application/json" \
--d '{"job": "zookeeper docker", "containerName": "zookeeper", "target": "127.0.0.1:8081"}'
+startService () {
+  echo $(curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/service?action=start" \
+  -H "Content-Type: application/json" \
+  -d '{"job": '\""$1"\"', "serviceName": '\""$2"\"', "target": '\""$3"\"'}' | grep -E -i "$4")
+}
+
+stopService () {
+  echo $(curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/service?action=stop" \
+  -H "Content-Type: application/json" \
+  -d '{"job": '\""$1"\"', "serviceName": '\""$2"\"', "target": '\""$3"\"'}' | grep -E -i "$4")
+}
+
+startDocker () {
+  echo $(curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/docker?action=start" \
+  -H "Content-Type: application/json" \
+  -d '{"job": '\""$1"\"', "containerName": '\""$2"\"', "target": '\""$3"\"'}' | grep -E -i "$4")
+}
+
+stopDocker () {
+  echo $(curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/docker?action=stop" \
+  -H "Content-Type: application/json" \
+  -d '{"job": '\""$1"\"', "containerName": '\""$2"\"', "target": '\""$3"\"'}' | grep -E -i "$4")
+}
+
+
+printf %"s\n" "------------ Init start service and container ------------"
+out=$(startService "zookeeper service" "simple" "127.0.0.1:8081" '"status":200')
+verifyOK $out
+
+out=$(startService "zookeeper service" "simple" "127.0.0.1:8081" '"status":500')
+verifyOK $out
+
+out=$(startDocker "zookeeper docker" "zookeeper" "127.0.0.1:8081" '"status":200')
+verifyOK $out
+
+
+printf "\n"%"s\n" "------------ Start not existing service and container ------------"
+out=$(startService "zookeeper_service" "my_zoo" "127.0.0.1:8081" '"status":500')
+verifyOK $out
+
+out=$(startDocker "zookeeper" "my_zoo" "127.0.0.1:8081" '"status":500')
+verifyOK $out
+
 
 printf "\n"%"s\n" "------------ Stop service and container ------------"
-curl -X POST "http://127.0.0.1:8090/chaos/api/v1/service?action=stop" \
--H "Content-Type: application/json" \
--d '{"job": "zookeeper service", "serviceName": "simple", "target": "127.0.0.1:8081"}'
+out=$(stopService "zookeeper service" "simple" "127.0.0.1:8081" '"status":200')
+verifyOK $out
 
-curl -X POST "http://127.0.0.1:8090/chaos/api/v1/docker?action=stop" \
--H "Content-Type: application/json" \
--d '{"job": "zookeeper docker", "containerName": "zookeeper", "target": "127.0.0.1:8081"}'
+out=$(stopDocker "zookeeper docker" "zookeeper" "127.0.0.1:8081" '"status":200')
+verifyOK $out
+
 
 printf "\n"%"s\n" "------------ Recover all ------------"
-curl -X POST "http://127.0.0.1:8090/chaos/api/v1/recover/alertmanager" \
+out=$(curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/recover/alertmanager" \
 -H "Content-Type: application/json" \
--d '{"alerts": [{"status": "firing", "labels": {"recoverAll": true}}]}'
+-d '{"alerts": [{"status": "firing", "labels": {"recoverAll": true}}]}' | grep -E -i '"status":200')
+verifyOK $out
+
 
 printf "\n"%"s\n" "------------ Stop docker ------------"
-curl -X POST "http://127.0.0.1:8090/chaos/api/v1/docker?action=stop" \
--H "Content-Type: application/json" \
--d '{"job": "zookeeper docker", "containerName": "zookeeper", "target": "127.0.0.1:8081"}'
+out=$(stopDocker "zookeeper docker" "zookeeper" "127.0.0.1:8081" '"status":200')
+verifyOK $out
+
 
 printf "\n"%"s\n" "------------ Recover job ------------"
-curl -X POST "http://127.0.0.1:8090/chaos/api/v1/recover/alertmanager" \
+out=$(curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/recover/alertmanager" \
 -H "Content-Type: application/json" \
--d '{"alerts": [{"status": "firing", "labels": {"recoverJob": "zookeeper docker"}}]}'
+-d '{"alerts": [{"status": "firing", "labels": {"recoverJob": "zookeeper docker"}}]}' | grep -E -i '"status":200')
+verifyOK $out
+
 
 printf "\n"%"s\n" "------------ Clean ------------"
-curl -X POST "http://127.0.0.1:8090/chaos/api/v1/service?action=stop" \
--H "Content-Type: application/json" \
--d '{"job": "zookeeper service", "serviceName": "simple", "target": "127.0.0.1:8081"}'
+out=$(stopService "zookeeper service" "simple" "127.0.0.1:8081" '"status":200')
+verifyOK $out
 
-curl -X POST "http://127.0.0.1:8090/chaos/api/v1/docker?action=stop" \
--H "Content-Type: application/json" \
--d '{"job": "zookeeper docker", "containerName": "zookeeper", "target": "127.0.0.1:8081"}'
+out=$(stopDocker "zookeeper docker" "zookeeper" "127.0.0.1:8081" '"status":200')
+verifyOK $out
+
+
+printf "\n"%"s\n" "------------ E2e test SUCCESS ------------"
