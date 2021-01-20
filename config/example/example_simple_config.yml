@@ -3,21 +3,21 @@ api_options:
   scheme: http
 
 jobs:
-  - job_name: "zookeeper"
+  - job_name: "zookeeper docker"
     type: "Docker"
-    component_name: "my_zoo"
-    targets: ['127.0.0.1:8081']
+    component_name: "zookeeper"
+    targets: ['127.0.0.1:8083', '127.0.0.1:8081']
   - job_name: "zookeeper service"
     type: "Service"
     component_name: "simple"
     targets: ['127.0.0.1:8082', '127.0.0.1:8081']
-  - job_name: "zookeeper docker"
+  - job_name: "zookeeper_docker"
     type: "Docker"
-    component_name: "zookeeper"
+    component_name: "test"
     targets: ['127.0.0.1:8082', '127.0.0.1:8081']
   - job_name: "zookeeper_service"
     type: "Service"
-    component_name: "my_zoo"
+    component_name: "test"
     targets: ['127.0.0.1:8081']
 
 health_check_report: true

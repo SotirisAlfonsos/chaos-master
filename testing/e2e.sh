@@ -44,10 +44,10 @@ verifyOK $out
 
 
 printf "\n"%"s\n" "------------ Start not existing service and container ------------"
-out=$(startService "zookeeper_service" "my_zoo" "127.0.0.1:8081" '"status":500')
+out=$(startService "zookeeper_service" "test" "127.0.0.1:8081" '"status":500')
 verifyOK $out
 
-out=$(startDocker "zookeeper" "my_zoo" "127.0.0.1:8081" '"status":500')
+out=$(startDocker "zookeeper_docker" "test" "127.0.0.1:8081" '"status":500')
 verifyOK $out
 
 

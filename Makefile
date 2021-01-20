@@ -6,3 +6,6 @@ build:
 
 run:
 	go run main.go --config.file=config/example/example_simple_config.yml
+
+run-tls:
+	go run main.go --config.file=config/example/example_tls_config.yml
