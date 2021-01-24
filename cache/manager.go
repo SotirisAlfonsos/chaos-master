@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"github.com/SotirisAlfonsos/chaos-bot/proto"
+	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/go-kit/kit/log"
 	"github.com/patrickmn/go-cache"
 )
@@ -18,7 +18,7 @@ func NewCacheManager(logger log.Logger) *Manager {
 	}
 }
 
-func (m *Manager) Register(key string, function func() (*proto.StatusResponse, error)) error {
+func (m *Manager) Register(key string, function func() (*v1.StatusResponse, error)) error {
 	if _, ok := m.cache.Get(key); ok {
 		return m.cache.Replace(key, function, 0)
 	}
@@ -29,9 +29,9 @@ func (m *Manager) GetAll() map[string]cache.Item {
 	return m.cache.Items()
 }
 
-func (m *Manager) Get(key string) func() (*proto.StatusResponse, error) {
+func (m *Manager) Get(key string) func() (*v1.StatusResponse, error) {
 	if f, ok := m.cache.Get(key); ok {
-		return f.(func() (*proto.StatusResponse, error))
+		return f.(func() (*v1.StatusResponse, error))
 	}
 	return nil
 }

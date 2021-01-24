@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/SotirisAlfonsos/chaos-bot/proto"
+	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/go-kit/kit/log"
@@ -28,9 +28,10 @@ type Connections struct {
 }
 
 type Connection interface {
-	GetServiceClient(target string) (proto.ServiceClient, error)
-	GetDockerClient(target string) (proto.DockerClient, error)
-	GetHealthClient(target string) (proto.HealthClient, error)
+	GetServiceClient(target string) (v1.ServiceClient, error)
+	GetDockerClient(target string) (v1.DockerClient, error)
+	GetCPUClient(target string) (v1.CPUClient, error)
+	GetHealthClient(target string) (v1.HealthClient, error)
 }
 
 type connection struct {
@@ -163,28 +164,36 @@ func loadTLSCredentials(cert string) (credentials.TransportCredentials, error) {
 	return credentials.NewTLS(tlsConfig), nil
 }
 
-func (connection *connection) GetServiceClient(target string) (proto.ServiceClient, error) {
+func (connection *connection) GetServiceClient(target string) (v1.ServiceClient, error) {
 	err := connection.redialForTarget(target)
 	if err != nil {
 		return nil, err
 	}
-	return proto.NewServiceClient(connection.clientConnection), nil
+	return v1.NewServiceClient(connection.clientConnection), nil
 }
 
-func (connection *connection) GetDockerClient(target string) (proto.DockerClient, error) {
+func (connection *connection) GetDockerClient(target string) (v1.DockerClient, error) {
 	err := connection.redialForTarget(target)
 	if err != nil {
 		return nil, err
 	}
-	return proto.NewDockerClient(connection.clientConnection), nil
+	return v1.NewDockerClient(connection.clientConnection), nil
 }
 
-func (connection *connection) GetHealthClient(target string) (proto.HealthClient, error) {
+func (connection *connection) GetCPUClient(target string) (v1.CPUClient, error) {
 	err := connection.redialForTarget(target)
 	if err != nil {
 		return nil, err
 	}
-	return proto.NewHealthClient(connection.clientConnection), nil
+	return v1.NewCPUClient(connection.clientConnection), nil
+}
+
+func (connection *connection) GetHealthClient(target string) (v1.HealthClient, error) {
+	err := connection.redialForTarget(target)
+	if err != nil {
+		return nil, err
+	}
+	return v1.NewHealthClient(connection.clientConnection), nil
 }
 
 func createLogger(debugLevel string) log.Logger {

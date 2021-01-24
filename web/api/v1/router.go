@@ -5,6 +5,7 @@ import (
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/SotirisAlfonsos/chaos-master/healthcheck"
 	"github.com/SotirisAlfonsos/chaos-master/network"
+	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/cpu"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/docker"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/service"
 	"github.com/go-kit/kit/log"
@@ -48,6 +49,7 @@ func (r *APIRouter) AddRoutes(healthChecker *healthcheck.HealthChecker, router *
 func setBotRouters(router *mux.Router, r *APIRouter) {
 	serviceControllerRouter(router, r)
 	dockerControllerRouter(router, r)
+	cpuControllerRouter(router, r)
 }
 
 func setRecoverRouter(router *mux.Router, r *APIRouter) {
@@ -71,6 +73,13 @@ func serviceControllerRouter(router *mux.Router, r *APIRouter) {
 func dockerControllerRouter(router *mux.Router, r *APIRouter) {
 	dController := docker.NewDockerController(filterJobsOnType(r.jobMap, config.Docker), r.connections, r.cache, r.logger)
 	router.HandleFunc("/docker", dController.DockerAction).
+		Queries("action", "{action}").
+		Methods("POST")
+}
+
+func cpuControllerRouter(router *mux.Router, r *APIRouter) {
+	cController := cpu.NewCPUController(filterJobsOnType(r.jobMap, config.CPU), r.connections, r.cache, r.logger)
+	router.HandleFunc("/cpu", cController.CPUAction).
 		Queries("action", "{action}").
 		Methods("POST")
 }

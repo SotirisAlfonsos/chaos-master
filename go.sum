@@ -16,6 +16,8 @@ github.com/Shopify/sarama v1.19.0/go.mod h1:FVkBWblsNy7DGZRfXLU0O9RCGt5g3g3yEuWX
 github.com/Shopify/toxiproxy v2.1.4+incompatible/go.mod h1:OXgGpZ6Cli1/URJOF1DMxUHB2q5Ap20/P/eIdh4G0pI=
 github.com/SotirisAlfonsos/chaos-bot v0.0.0-20210110213347-45858d10c97c h1:zlS6xOhrNA/Ip1ISmOQBdY5TFLvO9aLvbX4WaMcnjYo=
 github.com/SotirisAlfonsos/chaos-bot v0.0.0-20210110213347-45858d10c97c/go.mod h1:y9oFaTYHx1K+VKzrxhnGOCngRZHNlPnrd+PYC7bTXRs=
+github.com/SotirisAlfonsos/chaos-bot v0.0.0-20210124184145-e75868d49d89 h1:Yq2Iwk0NZ2GL9IvgxBdodopOgoXE1EtxV8tPanu4vT8=
+github.com/SotirisAlfonsos/chaos-bot v0.0.0-20210124184145-e75868d49d89/go.mod h1:/Z7o+f+mMEaCGzRJAres9Rcc0VszPbZfW8tSUpZZBtU=
 github.com/SotirisAlfonsos/chaos-master v0.0.0-20200601181005-5bd31b7d913e/go.mod h1:XYFlu0gB3sLbHcW1RrXZBvtpKtl21Lqx6kZtUlJ/jyI=
 github.com/SotirisAlfonsos/chaos-master v0.0.0-20200829191619-be86feb4a4c9/go.mod h1:VJBhhqUcpuMKRtSApdeoIfxb+6rN7i1Ynp1kM+zIKdo=
 github.com/SotirisAlfonsos/chaos-slave v0.0.0-20200606230330-b9ec8b66c4a0/go.mod h1:B6pRN4d/gH49hAJoNJETg7ipww+qtoaIdTm1UsV1wAs=

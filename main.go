@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	_ "github.com/SotirisAlfonsos/chaos-master/docs"
-
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/config"
+	_ "github.com/SotirisAlfonsos/chaos-master/docs"
 	"github.com/SotirisAlfonsos/chaos-master/healthcheck"
 	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/SotirisAlfonsos/chaos-master/web/api"

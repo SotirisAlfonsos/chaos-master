@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/SotirisAlfonsos/chaos-bot/proto"
+	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
@@ -79,20 +79,20 @@ func (rController *RController) performActionBasedOnLabels(labels Labels, respon
 	switch {
 	case labels.RecoverAll:
 		for key, val := range items {
-			rController.performAsync(key, val.Object.(func() (*proto.StatusResponse, error)), response, &wg)
+			rController.performAsync(key, val.Object.(func() (*v1.StatusResponse, error)), response, &wg)
 		}
 	case labels.RecoverJob != "":
 		for key, val := range items {
 			jobNameTarget := strings.Split(key, ",")
 			if jobNameTarget[0] == labels.RecoverJob {
-				rController.performAsync(key, val.Object.(func() (*proto.StatusResponse, error)), response, &wg)
+				rController.performAsync(key, val.Object.(func() (*v1.StatusResponse, error)), response, &wg)
 			}
 		}
 	case labels.RecoverTarget != "":
 		for key, val := range items {
 			jobNameTarget := strings.Split(key, ",")
 			if jobNameTarget[2] == labels.RecoverTarget {
-				rController.performAsync(key, val.Object.(func() (*proto.StatusResponse, error)), response, &wg)
+				rController.performAsync(key, val.Object.(func() (*v1.StatusResponse, error)), response, &wg)
 			}
 		}
 	}
@@ -100,7 +100,7 @@ func (rController *RController) performActionBasedOnLabels(labels Labels, respon
 	wg.Wait()
 }
 
-func (rController *RController) performAsync(key string, val func() (*proto.StatusResponse, error), response *RecoverResponsePayload, wg *sync.WaitGroup) {
+func (rController *RController) performAsync(key string, val func() (*v1.StatusResponse, error), response *RecoverResponsePayload, wg *sync.WaitGroup) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -109,18 +109,18 @@ func (rController *RController) performAsync(key string, val func() (*proto.Stat
 	}()
 }
 
-func action(uniqueName string, function func() (*proto.StatusResponse, error), cache *cache.Manager) *RecoverMessage {
-	jobNameTarget := strings.Split(uniqueName, ",")
+func action(uniqueName string, function func() (*v1.StatusResponse, error), cache *cache.Manager) *RecoverMessage {
+	jobTarget := strings.Split(uniqueName, ",")
 	statusResponse, err := function()
 
 	switch {
 	case err != nil:
-		return failureRecoverResponse(errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", jobNameTarget[2])).Error())
-	case statusResponse.Status != proto.StatusResponse_SUCCESS:
-		return failureRecoverResponse(fmt.Sprintf("Failure response from target {%s}", jobNameTarget[2]))
+		return failureRecoverResponse(errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", jobTarget[1])).Error())
+	case statusResponse.Status != v1.StatusResponse_SUCCESS:
+		return failureRecoverResponse(fmt.Sprintf("Failure response from target {%s}", jobTarget[1]))
 	}
 	cache.Delete(uniqueName)
-	message := fmt.Sprintf("Response from target {%s}, {%s}, {%s}", jobNameTarget[2], statusResponse.Message, statusResponse.Status)
+	message := fmt.Sprintf("Response from target {%s}, {%s}, {%s}", jobTarget[1], statusResponse.Message, statusResponse.Status)
 	return successRecoverResponse(message)
 }
 

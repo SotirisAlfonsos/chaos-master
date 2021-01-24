@@ -24,7 +24,7 @@ func TestShouldUnmarshalSimpleConfig(t *testing.T) {
 
 	assert.Equal(t, "8090", config.APIOptions.Port, "The correct port should be found from the fine")
 	assert.Equal(t, true, config.HealthCheckReport, "The health check report option should be found from the file")
-	assert.Equal(t, 3, len(config.JobsFromConfig))
+	assert.Equal(t, 4, len(config.JobsFromConfig))
 	assert.Equal(t, "zookeeper docker", config.JobsFromConfig[0].JobName, "the correct first job name from the file")
 	assert.Equal(t, "zookeeper service", config.JobsFromConfig[1].JobName, "the correct second job name from the file")
 	assert.Equal(t, "zookeeper service", config.JobsFromConfig[2].JobName, "the correct third job name from the file")
@@ -54,20 +54,29 @@ func TestShouldErrorWhenCanNotFindConfigFile(t *testing.T) {
 }
 
 func TestShouldErrorWhenCanNotUnmarshalFile(t *testing.T) {
-	config, err := GetConfig("test/unmarshalable_config.yml")
+	_, err := GetConfig("test/unmarshalable_config.yml")
 	if err != nil {
 		assert.Equal(t, "could not unmarshal yml: yaml: unmarshal errors:\n  line 2: cannot unmarshal !!map into []*config.JobsFromConfig", err.Error())
 	} else {
-		t.Errorf("There should be an error because the file does not exist %v", config)
+		t.Errorf("There should be an error because the file can not be unmarshaled")
 	}
 }
 
 func TestShouldErrorWhenImportantFieldsAreMissing(t *testing.T) {
 	config, err := GetConfig("test/missing_key_values.yml")
 	if err != nil {
-		assert.Equal(t, "Every job should contain a job_name, type and component_name", err.Error())
+		assert.Equal(t, "Every job should contain a job_name and type", err.Error())
 	} else {
-		t.Errorf("There should be an error because the file does not exist %v", config)
+		t.Errorf("There should be an error because the file is missing key values %v", config)
+	}
+}
+
+func Test_Should_Error_When_Docker_failure_does_not_have_component_name(t *testing.T) {
+	config, err := GetConfig("test/docker_no_component_name_config.yml")
+	if err != nil {
+		assert.Equal(t, "failure type {Docker} should have component_name", err.Error())
+	} else {
+		t.Errorf("There should be an error because the file is missing key values %v", config)
 	}
 }
 
@@ -81,13 +90,16 @@ func TestShouldGetJobMap(t *testing.T) {
 
 	jobMap := config.GetJobMap(logger)
 
-	assert.Equal(t, 2, len(config.JobsFromConfig)-1)
+	assert.Equal(t, 3, len(config.JobsFromConfig)-1)
 	assert.Equal(t, "my_zoo", jobMap["zookeeper docker"].ComponentName)
 	assert.Equal(t, Docker, jobMap["zookeeper docker"].FailureType)
 	assert.Equal(t, 1, len(jobMap["zookeeper docker"].Target))
 	assert.Equal(t, "simple", jobMap["zookeeper service"].ComponentName)
 	assert.Equal(t, Service, jobMap["zookeeper service"].FailureType)
 	assert.Equal(t, 2, len(jobMap["zookeeper service"].Target))
+	assert.Equal(t, "", jobMap["cpu injection"].ComponentName)
+	assert.Equal(t, CPU, jobMap["cpu injection"].FailureType)
+	assert.Equal(t, 1, len(jobMap["cpu injection"].Target))
 }
 
 func getLogger() log.Logger {

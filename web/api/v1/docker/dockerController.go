@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 
-	"github.com/SotirisAlfonsos/chaos-bot/proto"
+	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/SotirisAlfonsos/chaos-master/network"
@@ -87,8 +87,8 @@ type ResponsePayload struct {
 	Status  int    `json:"status"`
 }
 
-func newDockerRequest(details *RequestPayload) *proto.DockerRequest {
-	return &proto.DockerRequest{
+func newDockerRequest(details *RequestPayload) *v1.DockerRequest {
+	return &v1.DockerRequest{
 		JobName:              details.Job,
 		Name:                 details.Container,
 		XXX_NoUnkeyedLiteral: struct{}{},
@@ -97,8 +97,8 @@ func newDockerRequest(details *RequestPayload) *proto.DockerRequest {
 	}
 }
 
-func newDockerRequestNoTarget(details *RequestPayloadNoTarget) *proto.DockerRequest {
-	return &proto.DockerRequest{
+func newDockerRequestNoTarget(details *RequestPayloadNoTarget) *v1.DockerRequest {
+	return &v1.DockerRequest{
 		JobName:              details.Job,
 		Name:                 details.Container,
 		XXX_NoUnkeyedLiteral: struct{}{},
@@ -170,11 +170,11 @@ func (d *DController) DockerAction(w http.ResponseWriter, r *http.Request) {
 func (d *DController) performAction(
 	action action,
 	dConnection *dConnection,
-	dockerRequest *proto.DockerRequest,
+	dockerRequest *v1.DockerRequest,
 	target string,
 	response *ResponsePayload,
 ) {
-	var statusResponse *proto.StatusResponse
+	var statusResponse *v1.StatusResponse
 	var err error
 
 	dockerClient, err := dConnection.connection.GetDockerClient(target)
@@ -198,7 +198,7 @@ func (d *DController) performAction(
 	case err != nil:
 		err = errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", target))
 		response.internalServerError(err.Error(), d.logger)
-	case statusResponse.Status != proto.StatusResponse_SUCCESS:
+	case statusResponse.Status != v1.StatusResponse_SUCCESS:
 		response.internalServerError(fmt.Sprintf("Failure response from target {%s}", target), d.logger)
 	default:
 		response.Message = fmt.Sprintf("Response from target {%s}, {%s}, {%s}", target, statusResponse.Message, statusResponse.Status)
@@ -282,14 +282,14 @@ func getRandomTarget(targets []string) (string, error) {
 	return "", errors.New("No targets available")
 }
 
-func (d *DController) updateCache(dockerRequest *proto.DockerRequest, dockerClient proto.DockerClient, target string, action action) error {
-	uniqueName := fmt.Sprintf("%s,%s,%s", dockerRequest.JobName, dockerRequest.Name, target)
+func (d *DController) updateCache(dockerRequest *v1.DockerRequest, dockerClient v1.DockerClient, target string, action action) error {
+	uniqueName := fmt.Sprintf("%s,%s", dockerRequest.JobName, target)
 	switch action {
 	case start:
 		d.cacheManager.Delete(uniqueName)
 		return nil
 	case stop:
-		recoveryFunc := func() (*proto.StatusResponse, error) {
+		recoveryFunc := func() (*v1.StatusResponse, error) {
 			return dockerClient.Start(context.Background(), dockerRequest)
 		}
 		return d.cacheManager.Register(uniqueName, recoveryFunc)

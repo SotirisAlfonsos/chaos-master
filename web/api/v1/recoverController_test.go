@@ -10,13 +10,13 @@ import (
 	"sort"
 	"testing"
 
+	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/go-kit/kit/log"
 
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/gorilla/mux"
 
-	"github.com/SotirisAlfonsos/chaos-bot/proto"
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/SotirisAlfonsos/chaos-master/healthcheck"
 	"github.com/SotirisAlfonsos/chaos-master/network"
@@ -29,7 +29,7 @@ var (
 
 type TestData struct {
 	message    string
-	cacheItems map[string]func() (*proto.StatusResponse, error)
+	cacheItems map[string]func() (*v1.StatusResponse, error)
 	alerts     []*Alert
 	expected   *expectedResult
 }
@@ -43,7 +43,7 @@ func TestRecoverAllRequestSuccess(t *testing.T) { //nolint:dupl
 	dataItems := []TestData{
 		{
 			message: "Successfully recover all items from cache",
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job,container,127.0.0.1":   functionWithSuccessResponse(),
 				"job,container_2,127.0.0.2": functionWithSuccessResponse(),
 			},
@@ -54,7 +54,7 @@ func TestRecoverAllRequestSuccess(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Successfully recover one item from the cache and record failure on the rest",
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job_1,container,127.0.0.1": functionWithSuccessResponse(),
 				"job,container_2,127.0.0.2": functionWithFailureResponse(),
 				"job,container,127.0.0.2":   functionWithErrorResponse(),
@@ -66,7 +66,7 @@ func TestRecoverAllRequestSuccess(t *testing.T) { //nolint:dupl
 		},
 		{
 			message:    "Should not do anything and return ok for cache already empty",
-			cacheItems: map[string]func() (*proto.StatusResponse, error){},
+			cacheItems: map[string]func() (*v1.StatusResponse, error){},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverAll: true},
 			}},
@@ -83,7 +83,7 @@ func TestRecoverJobRequestSuccess(t *testing.T) { //nolint:dupl
 	dataItems := []TestData{
 		{
 			message: "Successfully recover all items from cache for job {job name}, while not removing other jobs",
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job name,container,127.0.0.1":             functionWithSuccessResponse(),
 				"job name,container_2,127.0.0.2":           functionWithSuccessResponse(),
 				"job different name,container_2,127.0.0.2": functionWithSuccessResponse(),
@@ -95,7 +95,7 @@ func TestRecoverJobRequestSuccess(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Successfully recover one item from the cache and record failure on the rest for job {job name}, while not removing other jobs",
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job name,container,127.0.0.1":           functionWithSuccessResponse(),
 				"job name,container_2,127.0.0.2":         functionWithFailureResponse(),
 				"job name,container,127.0.0.2":           functionWithErrorResponse(),
@@ -108,7 +108,7 @@ func TestRecoverJobRequestSuccess(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Should not do anything and return ok for job {job name} not in cache",
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job different name,container,127.0.0.1": functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
@@ -127,7 +127,7 @@ func TestRecoverTargetRequestSuccess(t *testing.T) { //nolint:dupl
 	dataItems := []TestData{
 		{
 			message: "Successfully recover all items from cache for target {127.0.0.1}, while not removing other jobs",
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job name,container,127.0.0.1":             functionWithSuccessResponse(),
 				"job different name,container_2,127.0.0.1": functionWithSuccessResponse(),
 				"job different name,container_2,127.0.0.2": functionWithSuccessResponse(),
@@ -139,7 +139,7 @@ func TestRecoverTargetRequestSuccess(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Successfully recover one item from the cache and record failure on the rest for target {127.0.0.1}, while not removing other jobs",
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job name,container,127.0.0.1":           functionWithSuccessResponse(),
 				"job other name,container_2,127.0.0.1":   functionWithFailureResponse(),
 				"job different name,container,127.0.0.1": functionWithErrorResponse(),
@@ -152,7 +152,7 @@ func TestRecoverTargetRequestSuccess(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Should not do anything and return ok for target {127.0.0.1} not in cache",
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job different name,container,127.0.0.2": functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
@@ -171,7 +171,7 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 	dataItems := []TestData{
 		{
 			message: "Successfully recover items on firing and ignore resolved alerts, resulting in two jobs recovered",
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job name,container,127.0.0.1":             functionWithSuccessResponse(),
 				"job different name,container_2,127.0.0.1": functionWithSuccessResponse(),
 				"job different name,container_2,127.0.0.2": functionWithSuccessResponse(),
@@ -186,7 +186,7 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Should not do anything for resolved alerts, no items should be removed from cache",
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job name,container,127.0.0.1":         functionWithSuccessResponse(),
 				"job other name,container_2,127.0.0.1": functionWithSuccessResponse(),
 			},
@@ -199,7 +199,7 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Should not do anything for unknown alert status, no items should be removed from cache",
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job different name,container,127.0.0.1": functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
@@ -248,7 +248,7 @@ func (recoverR *RecoverResponsePayload) getSortedStatuses() []string {
 func defaultAPIRouterWithCacheItems(
 	jobMap map[string]*config.Job,
 	connections *network.Connections,
-	cacheItems map[string]func() (*proto.StatusResponse, error),
+	cacheItems map[string]func() (*v1.StatusResponse, error),
 ) (*APIRouter, error) {
 	apiRouter := NewAPIRouter(jobMap, connections, cache.NewCacheManager(logger), logger)
 
@@ -273,21 +273,21 @@ func okResponse(statuses ...string) *RecoverResponsePayload {
 	}
 }
 
-func functionWithSuccessResponse() func() (*proto.StatusResponse, error) {
-	return func() (*proto.StatusResponse, error) {
-		return &proto.StatusResponse{Status: proto.StatusResponse_SUCCESS}, nil
+func functionWithSuccessResponse() func() (*v1.StatusResponse, error) {
+	return func() (*v1.StatusResponse, error) {
+		return &v1.StatusResponse{Status: v1.StatusResponse_SUCCESS}, nil
 	}
 }
 
-func functionWithFailureResponse() func() (*proto.StatusResponse, error) {
-	return func() (*proto.StatusResponse, error) {
-		return &proto.StatusResponse{Status: proto.StatusResponse_FAIL}, nil
+func functionWithFailureResponse() func() (*v1.StatusResponse, error) {
+	return func() (*v1.StatusResponse, error) {
+		return &v1.StatusResponse{Status: v1.StatusResponse_FAIL}, nil
 	}
 }
 
-func functionWithErrorResponse() func() (*proto.StatusResponse, error) {
-	return func() (*proto.StatusResponse, error) {
-		return &proto.StatusResponse{Status: proto.StatusResponse_FAIL}, errors.New("error")
+func functionWithErrorResponse() func() (*v1.StatusResponse, error) {
+	return func() (*v1.StatusResponse, error) {
+		return &v1.StatusResponse{Status: v1.StatusResponse_FAIL}, errors.New("error")
 	}
 }
 

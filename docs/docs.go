@@ -24,6 +24,59 @@ var doc = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/cpu": {
+            "post": {
+                "description": "Perform CPU spike injection. Provide a percentage that is proportionate to your logical CPUs.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Failure injections"
+                ],
+                "summary": "Inject CPU failures",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Specify to perform a start or a stop for the CPU injection",
+                        "name": "action",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "Specify the job name, percentage and target",
+                        "name": "requestPayload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/cpu.RequestPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/cpu.ResponsePayload"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/cpu.ResponsePayload"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/cpu.ResponsePayload"
+                        }
+                    }
+                }
+            }
+        },
         "/docker": {
             "post": {
                 "description": "Perform start or stop action on a container. If random is specified you do not have to provide a target",
@@ -207,6 +260,34 @@ var doc = `{
         }
     },
     "definitions": {
+        "cpu.RequestPayload": {
+            "type": "object",
+            "properties": {
+                "job": {
+                    "type": "string"
+                },
+                "percentage": {
+                    "type": "integer"
+                },
+                "target": {
+                    "type": "string"
+                }
+            }
+        },
+        "cpu.ResponsePayload": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
         "docker.RequestPayload": {
             "type": "object",
             "properties": {

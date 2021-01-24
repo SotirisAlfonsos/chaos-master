@@ -1,5 +1,23 @@
 basePath: /chaos/api/v1
 definitions:
+  cpu.RequestPayload:
+    properties:
+      job:
+        type: string
+      percentage:
+        type: integer
+      target:
+        type: string
+    type: object
+  cpu.ResponsePayload:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+      status:
+        type: integer
+    type: object
   docker.RequestPayload:
     properties:
       containerName:
@@ -84,6 +102,42 @@ info:
   title: Chaos Master API
   version: "1.0"
 paths:
+  /cpu:
+    post:
+      consumes:
+      - application/json
+      description: Perform CPU spike injection. Provide a percentage that is proportionate
+        to your logical CPUs.
+      parameters:
+      - description: Specify to perform a start or a stop for the CPU injection
+        in: query
+        name: action
+        required: true
+        type: string
+      - description: Specify the job name, percentage and target
+        in: body
+        name: requestPayload
+        required: true
+        schema:
+          $ref: '#/definitions/cpu.RequestPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/cpu.ResponsePayload'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/cpu.ResponsePayload'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/cpu.ResponsePayload'
+      summary: Inject CPU failures
+      tags:
+      - Failure injections
   /docker:
     post:
       consumes:

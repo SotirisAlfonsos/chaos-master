@@ -26,7 +26,7 @@ type RestAPIOptions struct {
 type JobsFromConfig struct {
 	JobName       string      `yaml:"job_name"`
 	FailureType   FailureType `yaml:"type"`
-	ComponentName string      `yaml:"component_name"`
+	ComponentName string      `yaml:"component_name,omitempty"`
 	Targets       []string    `yaml:"targets,omitempty"`
 }
 
@@ -41,6 +41,7 @@ type FailureType string
 const (
 	Docker  FailureType = "Docker"
 	Service FailureType = "Service"
+	CPU     FailureType = "CPU"
 )
 
 func GetConfig(file string) (*Config, error) {
@@ -81,10 +82,21 @@ func unmarshalConfFromFile(file string) (*Config, error) {
 
 func (config *Config) validate() error {
 	for _, jobFromConfig := range config.JobsFromConfig {
-		if jobFromConfig.JobName == "" || jobFromConfig.ComponentName == "" || jobFromConfig.FailureType == "" {
-			return errors.New("Every job should contain a job_name, type and component_name")
+		if jobFromConfig.JobName == "" || jobFromConfig.FailureType == "" {
+			return errors.New("Every job should contain a job_name and type")
 		}
-		if strings.Contains(jobFromConfig.JobName, ",") || strings.Contains(jobFromConfig.ComponentName, ",") {
+
+		if jobFromConfig.FailureType == Docker || jobFromConfig.FailureType == Service {
+			if jobFromConfig.ComponentName == "" {
+				return fmt.Errorf("failure type {%s} should have component_name", jobFromConfig.FailureType)
+			}
+		} else if jobFromConfig.FailureType == CPU {
+			if jobFromConfig.ComponentName != "" {
+				return errors.New("Job CPU should not have component_name")
+			}
+		}
+
+		if strings.Contains(jobFromConfig.JobName, ",") {
 			return errors.New("The job name and the component name should not contain the unique operator \",\"")
 		}
 	}
@@ -123,7 +135,12 @@ func (cj *JobsFromConfig) addToJobsMap(jobs map[string]*Job, logger log.Logger) 
 
 func showRegisteredJobs(jobsMap map[string]*Job, logger log.Logger) {
 	for jobName, job := range jobsMap {
-		_ = level.Info(logger).Log("msg", fmt.Sprintf("{%s} job registered for component {%s} type {%s} and targets %v",
-			jobName, job.ComponentName, job.FailureType, job.Target))
+		if job.ComponentName != "" {
+			_ = level.Info(logger).Log("msg", fmt.Sprintf("{%s} job registered for component {%s} type {%s} and targets %v",
+				jobName, job.ComponentName, job.FailureType, job.Target))
+		} else {
+			_ = level.Info(logger).Log("msg", fmt.Sprintf("{%s} job registered for type {%s} and targets %v",
+				jobName, job.FailureType, job.Target))
+		}
 	}
 }

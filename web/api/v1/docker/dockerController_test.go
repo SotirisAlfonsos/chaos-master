@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/SotirisAlfonsos/chaos-bot/proto"
+	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/config"
@@ -29,7 +29,7 @@ type TestData struct {
 	message        string
 	jobMap         map[string]*config.Job
 	connectionPool map[string]*dConnection
-	cacheItems     map[string]func() (*proto.StatusResponse, error)
+	cacheItems     map[string]func() (*v1.StatusResponse, error)
 	requestPayload *RequestPayload
 	expected       *expectedResult
 }
@@ -40,36 +40,40 @@ type expectedResult struct {
 }
 
 type mockDockerClient struct {
-	Status *proto.StatusResponse
+	Status *v1.StatusResponse
 	Error  error
 }
 
-func GetMockDockerClient(status *proto.StatusResponse, err error) proto.DockerClient {
+func GetMockDockerClient(status *v1.StatusResponse, err error) v1.DockerClient {
 	return &mockDockerClient{Status: status, Error: err}
 }
 
-func (msc *mockDockerClient) Start(ctx context.Context, in *proto.DockerRequest, opts ...grpc.CallOption) (*proto.StatusResponse, error) {
+func (msc *mockDockerClient) Start(ctx context.Context, in *v1.DockerRequest, opts ...grpc.CallOption) (*v1.StatusResponse, error) {
 	return msc.Status, msc.Error
 }
 
-func (msc *mockDockerClient) Stop(ctx context.Context, in *proto.DockerRequest, opts ...grpc.CallOption) (*proto.StatusResponse, error) {
+func (msc *mockDockerClient) Stop(ctx context.Context, in *v1.DockerRequest, opts ...grpc.CallOption) (*v1.StatusResponse, error) {
 	return msc.Status, msc.Error
 }
 
 type connection struct {
-	status *proto.StatusResponse
+	status *v1.StatusResponse
 	err    error
 }
 
-func (connection *connection) GetServiceClient(target string) (proto.ServiceClient, error) {
+func (connection *connection) GetServiceClient(target string) (v1.ServiceClient, error) {
 	return nil, nil
 }
 
-func (connection *connection) GetDockerClient(target string) (proto.DockerClient, error) {
+func (connection *connection) GetDockerClient(target string) (v1.DockerClient, error) {
 	return GetMockDockerClient(connection.status, connection.err), nil
 }
 
-func (connection *connection) GetHealthClient(target string) (proto.HealthClient, error) {
+func (connection *connection) GetCPUClient(target string) (v1.CPUClient, error) {
+	return nil, nil
+}
+
+func (connection *connection) GetHealthClient(target string) (v1.HealthClient, error) {
 	return nil, nil
 }
 
@@ -77,15 +81,19 @@ type failedConnection struct {
 	err error
 }
 
-func (failedConnection *failedConnection) GetServiceClient(target string) (proto.ServiceClient, error) {
+func (failedConnection *failedConnection) GetServiceClient(target string) (v1.ServiceClient, error) {
 	return nil, nil
 }
 
-func (failedConnection *failedConnection) GetDockerClient(target string) (proto.DockerClient, error) {
+func (failedConnection *failedConnection) GetDockerClient(target string) (v1.DockerClient, error) {
 	return nil, failedConnection.err
 }
 
-func (failedConnection *failedConnection) GetHealthClient(target string) (proto.HealthClient, error) {
+func (failedConnection *failedConnection) GetCPUClient(target string) (v1.CPUClient, error) {
+	return nil, failedConnection.err
+}
+
+func (failedConnection *failedConnection) GetHealthClient(target string) (v1.HealthClient, error) {
 	return nil, nil
 }
 
@@ -112,8 +120,8 @@ func TestStartDockerSuccess(t *testing.T) {
 			connectionPool: map[string]*dConnection{
 				"127.0.0.1": withSuccessDockerConnection(),
 			},
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
-				"job name,container name,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
+				"job name,127.0.0.1": functionWithSuccessResponse(),
 			},
 			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
@@ -137,8 +145,8 @@ func TestStopDockerSuccess(t *testing.T) {
 				"127.0.0.1": withSuccessDockerConnection(),
 				"127.0.0.2": withSuccessDockerConnection(),
 			},
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
-				"job name,container name,127.0.0.2": functionWithSuccessResponse(),
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
+				"job name,127.0.0.2": functionWithSuccessResponse(),
 			},
 			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 2, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
@@ -151,8 +159,8 @@ func TestStopDockerSuccess(t *testing.T) {
 			connectionPool: map[string]*dConnection{
 				"127.0.0.1": withSuccessDockerConnection(),
 			},
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
-				"job name,container name,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
+				"job name,127.0.0.1": functionWithSuccessResponse(),
 			},
 			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
@@ -323,7 +331,7 @@ type TestDataForRandomDocker struct {
 	message        string
 	jobMap         map[string]*config.Job
 	connectionPool map[string]*dConnection
-	cacheItems     map[string]func() (*proto.StatusResponse, error)
+	cacheItems     map[string]func() (*v1.StatusResponse, error)
 	requestPayload *RequestPayloadNoTarget
 	expected       *expectedResult
 }
@@ -351,8 +359,8 @@ func TestStartRandomDockerSuccess(t *testing.T) {
 			connectionPool: map[string]*dConnection{
 				"127.0.0.1": withSuccessDockerConnection(),
 			},
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
-				"job name,container name,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
+				"job name,127.0.0.1": functionWithSuccessResponse(),
 			},
 			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name"},
 			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
@@ -387,8 +395,8 @@ func TestStopRandomDockerSuccess(t *testing.T) {
 			connectionPool: map[string]*dConnection{
 				"127.0.0.1": withSuccessDockerConnection(),
 			},
-			cacheItems: map[string]func() (*proto.StatusResponse, error){
-				"job name,container name,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[string]func() (*v1.StatusResponse, error){
+				"job name,127.0.0.1": functionWithSuccessResponse(),
 			},
 			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name"},
 			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
@@ -558,9 +566,9 @@ func internalServerErrorResponse(error string) *ResponsePayload {
 	}
 }
 
-func functionWithSuccessResponse() func() (*proto.StatusResponse, error) {
-	return func() (*proto.StatusResponse, error) {
-		return &proto.StatusResponse{Status: proto.StatusResponse_SUCCESS}, nil
+func functionWithSuccessResponse() func() (*v1.StatusResponse, error) {
+	return func() (*v1.StatusResponse, error) {
+		return &v1.StatusResponse{Status: v1.StatusResponse_SUCCESS}, nil
 	}
 }
 
@@ -587,15 +595,15 @@ func assertRandomActionPerformed(t *testing.T, dataItem TestDataForRandomDocker,
 }
 
 func withSuccessDockerConnection() *dConnection {
-	connection := &connection{status: new(proto.StatusResponse), err: nil}
+	connection := &connection{status: new(v1.StatusResponse), err: nil}
 	return &dConnection{
 		connection: connection,
 	}
 }
 
 func withFailureDockerConnection() *dConnection {
-	statusResponse := new(proto.StatusResponse)
-	statusResponse.Status = proto.StatusResponse_FAIL
+	statusResponse := new(v1.StatusResponse)
+	statusResponse.Status = v1.StatusResponse_FAIL
 	connection := &connection{status: statusResponse, err: nil}
 	return &dConnection{
 		connection: connection,
@@ -603,8 +611,8 @@ func withFailureDockerConnection() *dConnection {
 }
 
 func withErrorDockerConnection(errorMessage string) *dConnection {
-	statusResponse := new(proto.StatusResponse)
-	statusResponse.Status = proto.StatusResponse_FAIL
+	statusResponse := new(v1.StatusResponse)
+	statusResponse.Status = v1.StatusResponse_FAIL
 	connection := &connection{status: statusResponse, err: errors.New(errorMessage)}
 	return &dConnection{
 		connection: connection,
@@ -664,7 +672,7 @@ func dockerHTTPTestServerWithCacheItems(
 	jobMap map[string]*config.Job,
 	connectionPool map[string]*dConnection,
 	cacheManager *cache.Manager,
-	cacheItems map[string]func() (*proto.StatusResponse, error),
+	cacheItems map[string]func() (*v1.StatusResponse, error),
 ) (*httptest.Server, error) {
 	for key, val := range cacheItems {
 		err := cacheManager.Register(key, val)

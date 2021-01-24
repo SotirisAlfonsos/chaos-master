@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/SotirisAlfonsos/chaos-bot/proto"
+	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/SotirisAlfonsos/chaos-master/network"
@@ -81,8 +81,8 @@ type ResponsePayload struct {
 	Status  int    `json:"status"`
 }
 
-func newServiceRequest(details *RequestPayload) *proto.ServiceRequest {
-	return &proto.ServiceRequest{
+func newServiceRequest(details *RequestPayload) *v1.ServiceRequest {
+	return &v1.ServiceRequest{
 		JobName:              details.Job,
 		Name:                 details.ServiceName,
 		XXX_NoUnkeyedLiteral: struct{}{},
@@ -147,11 +147,11 @@ func (s *SController) ServiceAction(w http.ResponseWriter, r *http.Request) {
 func (s *SController) performAction(
 	action action,
 	sConnection *sConnection,
-	serviceRequest *proto.ServiceRequest,
+	serviceRequest *v1.ServiceRequest,
 	details *RequestPayload,
 	response *ResponsePayload,
 ) {
-	var statusResponse *proto.StatusResponse
+	var statusResponse *v1.StatusResponse
 	var err error
 
 	serviceClient, err := sConnection.connection.GetServiceClient(details.Target)
@@ -175,7 +175,7 @@ func (s *SController) performAction(
 	case err != nil:
 		err = errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", details.Target))
 		response.internalServerError(err.Error(), s.logger)
-	case statusResponse.Status != proto.StatusResponse_SUCCESS:
+	case statusResponse.Status != v1.StatusResponse_SUCCESS:
 		response.internalServerError(fmt.Sprintf("Failure response from target {%s}", details.Target), s.logger)
 	default:
 		response.Message = fmt.Sprintf("Response from target {%s}, {%s}, {%s}", details.Target, statusResponse.Message, statusResponse.Status)
@@ -186,14 +186,14 @@ func (s *SController) performAction(
 	}
 }
 
-func (s *SController) updateCache(serviceRequest *proto.ServiceRequest, serviceClient proto.ServiceClient, target string, action action) error {
-	uniqueName := fmt.Sprintf("%s,%s,%s", serviceRequest.JobName, serviceRequest.Name, target)
+func (s *SController) updateCache(serviceRequest *v1.ServiceRequest, serviceClient v1.ServiceClient, target string, action action) error {
+	uniqueName := fmt.Sprintf("%s,%s", serviceRequest.JobName, target)
 	switch action {
 	case start:
 		s.cacheManager.Delete(uniqueName)
 		return nil
 	case stop:
-		recoveryFunc := func() (*proto.StatusResponse, error) {
+		recoveryFunc := func() (*v1.StatusResponse, error) {
 			return serviceClient.Start(context.Background(), serviceRequest)
 		}
 		return s.cacheManager.Register(uniqueName, recoveryFunc)

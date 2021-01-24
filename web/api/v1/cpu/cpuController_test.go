@@ -1,4 +1,4 @@
-package service
+package cpu
 
 import (
 	"bytes"
@@ -27,7 +27,7 @@ var (
 type TestData struct {
 	message        string
 	jobMap         map[string]*config.Job
-	connectionPool map[string]*sConnection
+	connectionPool map[string]*cConnection
 	cacheItems     map[string]func() (*v1.StatusResponse, error)
 	requestPayload *RequestPayload
 	expected       *expectedResult
@@ -38,21 +38,21 @@ type expectedResult struct {
 	payload   *ResponsePayload
 }
 
-type mockServiceClient struct {
+type mockCPUClient struct {
 	Status *v1.StatusResponse
 	Error  error
 }
 
-func GetMockServiceClient(status *v1.StatusResponse, err error) v1.ServiceClient {
-	return &mockServiceClient{Status: status, Error: err}
+func GetMockCPUClient(status *v1.StatusResponse, err error) v1.CPUClient {
+	return &mockCPUClient{Status: status, Error: err}
 }
 
-func (msc *mockServiceClient) Start(ctx context.Context, in *v1.ServiceRequest, opts ...grpc.CallOption) (*v1.StatusResponse, error) {
-	return msc.Status, msc.Error
+func (mcc *mockCPUClient) Start(ctx context.Context, in *v1.CPURequest, opts ...grpc.CallOption) (*v1.StatusResponse, error) {
+	return mcc.Status, mcc.Error
 }
 
-func (msc *mockServiceClient) Stop(ctx context.Context, in *v1.ServiceRequest, opts ...grpc.CallOption) (*v1.StatusResponse, error) {
-	return msc.Status, msc.Error
+func (mcc *mockCPUClient) Stop(ctx context.Context, in *v1.CPURequest, opts ...grpc.CallOption) (*v1.StatusResponse, error) {
+	return mcc.Status, mcc.Error
 }
 
 type connection struct {
@@ -61,7 +61,7 @@ type connection struct {
 }
 
 func (connection *connection) GetServiceClient(target string) (v1.ServiceClient, error) {
-	return GetMockServiceClient(connection.status, connection.err), nil
+	return nil, nil
 }
 
 func (connection *connection) GetDockerClient(target string) (v1.DockerClient, error) {
@@ -69,7 +69,7 @@ func (connection *connection) GetDockerClient(target string) (v1.DockerClient, e
 }
 
 func (connection *connection) GetCPUClient(target string) (v1.CPUClient, error) {
-	return nil, nil
+	return GetMockCPUClient(connection.status, connection.err), nil
 }
 
 func (connection *connection) GetHealthClient(target string) (v1.HealthClient, error) {
@@ -89,41 +89,41 @@ func (failedConnection *failedConnection) GetDockerClient(target string) (v1.Doc
 }
 
 func (failedConnection *failedConnection) GetCPUClient(target string) (v1.CPUClient, error) {
-	return nil, nil
+	return nil, failedConnection.err
 }
 
 func (failedConnection *failedConnection) GetHealthClient(target string) (v1.HealthClient, error) {
 	return nil, nil
 }
 
-func TestStartServiceSuccess(t *testing.T) {
+func TestStartCPUSuccess(t *testing.T) {
 	dataItems := []TestData{
 		{
-			message: "Successfully start single container with specific job, name and target",
+			message: "Successfully start cpu injection with specific job and target and add it in cache",
 			jobMap: map[string]*config.Job{
-				"job name":           newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
-				"job different name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job name":           newCPUJob("127.0.0.1", "127.0.0.2"),
+				"job different name": newCPUJob("127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*sConnection{
-				"127.0.0.1": withSuccessServiceConnection(),
-				"127.0.0.2": withSuccessServiceConnection(),
+			connectionPool: map[string]*cConnection{
+				"127.0.0.1": withSuccessCPUConnection(),
+				"127.0.0.2": withSuccessCPUConnection(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
-			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+			requestPayload: &RequestPayload{Job: "job name", Percentage: 100, Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 		{
-			message: "Successfully start single container with specific job, name and target and remove it from the cache",
+			message: "Successfully start cpu injection with specific job and target and dont add it in cache if already exists",
 			jobMap: map[string]*config.Job{
-				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job name": newCPUJob("127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*sConnection{
-				"127.0.0.1": withSuccessServiceConnection(),
+			connectionPool: map[string]*cConnection{
+				"127.0.0.1": withSuccessCPUConnection(),
 			},
 			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job name,127.0.0.1": functionWithSuccessResponse(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
-			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+			requestPayload: &RequestPayload{Job: "job name", Percentage: 100, Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 	}
 
@@ -135,34 +135,34 @@ func TestStartServiceSuccess(t *testing.T) {
 func TestStopServiceSuccess(t *testing.T) {
 	dataItems := []TestData{
 		{
-			message: "Successfully stop single service with specific job, name and target and add it in cache",
+			message: "Successfully stop CPU injection with specific job and target and dont add it in cache",
 			jobMap: map[string]*config.Job{
-				"job name":           newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
-				"job different name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job name":           newCPUJob("127.0.0.1", "127.0.0.2"),
+				"job different name": newCPUJob("127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*sConnection{
-				"127.0.0.1": withSuccessServiceConnection(),
-				"127.0.0.2": withSuccessServiceConnection(),
+			connectionPool: map[string]*cConnection{
+				"127.0.0.1": withSuccessCPUConnection(),
+				"127.0.0.2": withSuccessCPUConnection(),
 			},
 			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job name,127.0.0.2": functionWithSuccessResponse(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
-			expected:       &expectedResult{cacheSize: 2, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 		{
-			message: "Successfully stop single service with specific job, name and target and dont add it in cache if already exists",
+			message: "Successfully stop CPU injection with specific job and target and remove it from cache",
 			jobMap: map[string]*config.Job{
-				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job name": newCPUJob("service name", "127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*sConnection{
-				"127.0.0.1": withSuccessServiceConnection(),
+			connectionPool: map[string]*cConnection{
+				"127.0.0.1": withSuccessCPUConnection(),
 			},
 			cacheItems: map[string]func() (*v1.StatusResponse, error){
 				"job name,127.0.0.1": functionWithSuccessResponse(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
-			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 	}
 
@@ -171,44 +171,33 @@ func TestStopServiceSuccess(t *testing.T) {
 	}
 }
 
-func TestServiceActionOneOfJobContainerNameTargetDoesNotExist(t *testing.T) {
+func TestCPUActionOneOfJobTargetDoesNotExist(t *testing.T) {
 	dataItems := []TestData{
 		{
 			message: "Should receive bad request and not update cache for action when job name does not exist",
 			jobMap: map[string]*config.Job{
-				"job name":           newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
-				"job different name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job name":           newCPUJob("127.0.0.1", "127.0.0.2"),
+				"job different name": newCPUJob("127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*sConnection{
-				"127.0.0.1": withSuccessServiceConnection(),
+			connectionPool: map[string]*cConnection{
+				"127.0.0.1": withSuccessCPUConnection(),
 			},
-			requestPayload: &RequestPayload{Job: "job name does not exist", ServiceName: "service name", Target: "127.0.0.1"},
+			requestPayload: &RequestPayload{Job: "job name does not exist", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("Could not find job {job name does not exist}")},
 		},
 		{
-			message: "Should receive bad request and not update cache for action when service name does not exist for target",
+			message: "Should receive bad request and not update cache for action when target name does not exist for job",
 			jobMap: map[string]*config.Job{
-				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job name": newCPUJob("127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*sConnection{
-				"127.0.0.1": withSuccessServiceConnection(),
+			connectionPool: map[string]*cConnection{
+				"127.0.0.1": withSuccessCPUConnection(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name does not exist", Target: "127.0.0.1"},
+			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.3"},
 			expected: &expectedResult{
 				cacheSize: 0,
-				payload:   badRequestResponse("Service {service name does not exist} is not registered for target {127.0.0.1}"),
+				payload:   badRequestResponse("Target {127.0.0.3} is not registered for job {job name}"),
 			},
-		},
-		{
-			message: "Should receive bad request and not update cache for action when target does not exist for the job and service specified",
-			jobMap: map[string]*config.Job{
-				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
-			},
-			connectionPool: map[string]*sConnection{
-				"127.0.0.1": withSuccessServiceConnection(),
-			},
-			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "0.0.0.0"},
-			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("Service {service name} is not registered for target {0.0.0.0}")},
 		},
 	}
 
@@ -223,29 +212,29 @@ func TestServiceActionOneOfJobContainerNameTargetDoesNotExist(t *testing.T) {
 	}
 }
 
-func TestServiceActionFailure(t *testing.T) {
+func TestCPUActionFailure(t *testing.T) {
 	dataItems := []TestData{
 		{
 			message: "Should receive internal server error and not update cache if the request fails on bot",
 			jobMap: map[string]*config.Job{
-				"job name":           newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
-				"job different name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job name":           newCPUJob("127.0.0.1", "127.0.0.2"),
+				"job different name": newCPUJob("127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*sConnection{
-				"127.0.0.1": withFailureServiceConnection(),
+			connectionPool: map[string]*cConnection{
+				"127.0.0.1": withFailureCPUConnection(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
+			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 0, payload: internalServerErrorResponse("Failure response from target {127.0.0.1}")},
 		},
 		{
 			message: "Should receive internal server error and not update cache if the request errors on bot",
 			jobMap: map[string]*config.Job{
-				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job name": newCPUJob("127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*sConnection{
-				"127.0.0.1": withErrorServiceConnection("error occurred"),
+			connectionPool: map[string]*cConnection{
+				"127.0.0.1": withErrorCPUConnection("error occurred"),
 			},
-			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
+			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
 			expected: &expectedResult{
 				cacheSize: 0, payload: internalServerErrorResponse("Error response from target {127.0.0.1}: error occurred")},
 		},
@@ -262,18 +251,18 @@ func TestServiceActionFailure(t *testing.T) {
 	}
 }
 
-func TestServiceActionWithNoGrpcConnectionToTarget(t *testing.T) {
+func TestCPUActionWithNoGrpcConnectionToTarget(t *testing.T) {
 	dataItems := []TestData{
 		{
 			message: "Should receive bad request and not update cache if the action to perform is invalid",
 			jobMap: map[string]*config.Job{
-				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job name": newCPUJob("127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*sConnection{
-				"127.0.0.1": withFailureToSetServiceConnection("Can not dial target"),
+			connectionPool: map[string]*cConnection{
+				"127.0.0.1": withFailureToSetCPUConnection("Can not dial target"),
 			},
-			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
-			expected:       &expectedResult{cacheSize: 0, payload: internalServerErrorResponse("Can not get service connection from target {127.0.0.1}: Can not dial target")},
+			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: internalServerErrorResponse("Can not get cpu connection for target {127.0.0.1}: Can not dial target")},
 		},
 	}
 
@@ -283,17 +272,17 @@ func TestServiceActionWithNoGrpcConnectionToTarget(t *testing.T) {
 	}
 }
 
-func TestServiceWithInvalidAction(t *testing.T) {
+func TestCPUWithInvalidAction(t *testing.T) {
 	dataItems := []TestData{
 		{
 			message: "Should receive bad request and not update cache if the action to perform is invalid",
 			jobMap: map[string]*config.Job{
-				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
+				"job name": newCPUJob("127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*sConnection{
-				"127.0.0.1": withSuccessServiceConnection(),
+			connectionPool: map[string]*cConnection{
+				"127.0.0.1": withSuccessCPUConnection(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
+			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("The action {invalidAction} is not supported")},
 		},
 	}
@@ -308,12 +297,12 @@ func assertActionPerformed(t *testing.T, dataItem TestData, action string) {
 	t.Log(dataItem.message)
 
 	cacheManager := cache.NewCacheManager(logger)
-	server, err := serviceHTTPTestServerWithCacheItems(dataItem.jobMap, dataItem.connectionPool, cacheManager, dataItem.cacheItems)
+	server, err := cpuHTTPTestServerWithCacheItems(dataItem.jobMap, dataItem.connectionPool, cacheManager, dataItem.cacheItems)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	response, err := servicePostCall(server, dataItem.requestPayload, action)
+	response, err := cpuPostCall(server, dataItem.requestPayload, action)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,49 +315,48 @@ func assertActionPerformed(t *testing.T, dataItem TestData, action string) {
 	server.Close()
 }
 
-func newServiceJob(componentName string, targets ...string) *config.Job {
+func newCPUJob(targets ...string) *config.Job {
 	return &config.Job{
-		ComponentName: componentName,
-		FailureType:   config.Service,
-		Target:        targets,
+		FailureType: config.Service,
+		Target:      targets,
 	}
 }
 
-func withSuccessServiceConnection() *sConnection {
+func withSuccessCPUConnection() *cConnection {
 	connection := &connection{status: new(v1.StatusResponse), err: nil}
-	return &sConnection{
+	return &cConnection{
 		connection: connection,
 	}
 }
 
-func withFailureServiceConnection() *sConnection {
+func withFailureCPUConnection() *cConnection {
 	statusResponse := new(v1.StatusResponse)
 	statusResponse.Status = v1.StatusResponse_FAIL
 	connection := &connection{status: statusResponse, err: nil}
-	return &sConnection{
+	return &cConnection{
 		connection: connection,
 	}
 }
 
-func withErrorServiceConnection(errorMessage string) *sConnection {
+func withErrorCPUConnection(errorMessage string) *cConnection {
 	statusResponse := new(v1.StatusResponse)
 	statusResponse.Status = v1.StatusResponse_FAIL
 	connection := &connection{status: statusResponse, err: errors.New(errorMessage)}
-	return &sConnection{
+	return &cConnection{
 		connection: connection,
 	}
 }
 
-func withFailureToSetServiceConnection(errorMessage string) *sConnection {
+func withFailureToSetCPUConnection(errorMessage string) *cConnection {
 	connection := &failedConnection{err: errors.New(errorMessage)}
-	return &sConnection{
+	return &cConnection{
 		connection: connection,
 	}
 }
 
-func serviceHTTPTestServerWithCacheItems(
+func cpuHTTPTestServerWithCacheItems(
 	jobMap map[string]*config.Job,
-	connectionPool map[string]*sConnection,
+	connectionPool map[string]*cConnection,
 	cacheManager *cache.Manager,
 	cacheItems map[string]func() (*v1.StatusResponse, error),
 ) (*httptest.Server, error) {
@@ -379,7 +367,7 @@ func serviceHTTPTestServerWithCacheItems(
 		}
 	}
 
-	sController := &SController{
+	cController := &CController{
 		jobs:           jobMap,
 		connectionPool: connectionPool,
 		cacheManager:   cacheManager,
@@ -387,16 +375,16 @@ func serviceHTTPTestServerWithCacheItems(
 	}
 
 	router := mux.NewRouter()
-	router.HandleFunc("/service", sController.ServiceAction).
+	router.HandleFunc("/cpu", cController.CPUAction).
 		Queries("action", "{action}").
 		Methods("POST")
 
 	return httptest.NewServer(router), nil
 }
 
-func servicePostCall(server *httptest.Server, details *RequestPayload, action string) (*ResponsePayload, error) {
+func cpuPostCall(server *httptest.Server, details *RequestPayload, action string) (*ResponsePayload, error) {
 	requestBody, _ := json.Marshal(details)
-	url := server.URL + "/service?action=" + action
+	url := server.URL + "/cpu?action=" + action
 
 	return post(requestBody, url)
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/SotirisAlfonsos/chaos-bot/proto"
+	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/go-kit/kit/log"
 	"github.com/stretchr/testify/assert"
@@ -80,9 +80,9 @@ func TestGetNilForNonExistingItem(t *testing.T) {
 	assert.Nil(t, function)
 }
 
-func getSampleFunction() func() (*proto.StatusResponse, error) {
-	return func() (*proto.StatusResponse, error) {
-		return &proto.StatusResponse{}, nil
+func getSampleFunction() func() (*v1.StatusResponse, error) {
+	return func() (*v1.StatusResponse, error) {
+		return &v1.StatusResponse{}, nil
 	}
 }
 

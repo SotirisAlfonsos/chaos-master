@@ -4,14 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
+	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-
 	"github.com/robfig/cron/v3"
-
-	"github.com/SotirisAlfonsos/chaos-bot/proto"
-
-	"github.com/SotirisAlfonsos/chaos-master/network"
 )
 
 type HealthChecker struct {
@@ -20,7 +17,7 @@ type HealthChecker struct {
 }
 
 type Details struct {
-	Status     proto.HealthCheckResponse_ServingStatus
+	Status     v1.HealthCheckResponse_ServingStatus
 	connection network.Connection
 }
 
@@ -28,7 +25,7 @@ func Register(connections *network.Connections, logger log.Logger) *HealthChecke
 	healthChecker := &HealthChecker{DetailsMap: make(map[string]*Details), logger: logger}
 	for target, connection := range connections.Pool {
 		healthChecker.DetailsMap[target] = &Details{
-			Status:     proto.HealthCheckResponse_UNKNOWN,
+			Status:     v1.HealthCheckResponse_UNKNOWN,
 			connection: connection,
 		}
 	}
@@ -48,12 +45,12 @@ func (hch *HealthChecker) Start(report bool) {
 				continue
 			}
 
-			resp, err := client.Check(context.Background(), &proto.HealthCheckRequest{})
+			resp, err := client.Check(context.Background(), &v1.HealthCheckRequest{})
 			if err != nil {
 				_ = level.Error(hch.logger).Log(
 					"msg", fmt.Sprintf("Failed to get valid response when health-checking target %s", target),
 					"err", err)
-				hch.DetailsMap[target].Status = proto.HealthCheckResponse_NOT_SERVING
+				hch.DetailsMap[target].Status = v1.HealthCheckResponse_NOT_SERVING
 			} else {
 				hch.DetailsMap[target].Status = resp.Status
 			}
