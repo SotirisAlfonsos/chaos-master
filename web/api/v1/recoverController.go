@@ -91,7 +91,7 @@ func (rController *RController) performActionBasedOnLabels(labels Labels, respon
 	case labels.RecoverTarget != "":
 		for key, val := range items {
 			jobNameTarget := strings.Split(key, ",")
-			if jobNameTarget[2] == labels.RecoverTarget {
+			if jobNameTarget[1] == labels.RecoverTarget {
 				rController.performAsync(key, val.Object.(func() (*v1.StatusResponse, error)), response, &wg)
 			}
 		}

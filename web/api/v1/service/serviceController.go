@@ -129,7 +129,7 @@ func (s *SController) ServiceAction(w http.ResponseWriter, r *http.Request) {
 		for _, target := range job.Target {
 			if target == requestPayload.Target && job.ComponentName == requestPayload.ServiceName {
 				serviceRequest := newServiceRequest(requestPayload)
-				s.performAction(action, s.connectionPool[target], serviceRequest, requestPayload, response)
+				s.performAction(action, s.connectionPool[target], serviceRequest, requestPayload.Target, response)
 				serviceExists = true
 			}
 		}
@@ -148,15 +148,15 @@ func (s *SController) performAction(
 	action action,
 	sConnection *sConnection,
 	serviceRequest *v1.ServiceRequest,
-	details *RequestPayload,
+	target string,
 	response *ResponsePayload,
 ) {
 	var statusResponse *v1.StatusResponse
 	var err error
 
-	serviceClient, err := sConnection.connection.GetServiceClient(details.Target)
+	serviceClient, err := sConnection.connection.GetServiceClient(target)
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Can not get service connection from target {%s}", details.Target))
+		err = errors.Wrap(err, fmt.Sprintf("Can not get service connection from target {%s}", target))
 		response.internalServerError(err.Error(), s.logger)
 		return
 	}
@@ -171,18 +171,28 @@ func (s *SController) performAction(
 		return
 	}
 
+	message, err := handleGRPCResponse(statusResponse, err, target)
+	if err != nil {
+		response.internalServerError(err.Error(), s.logger)
+		return
+	}
+
+	response.Message = message
+	_ = level.Info(s.logger).Log("msg", response.Message)
+
+	if err = s.updateCache(serviceRequest, serviceClient, target, action); err != nil {
+		_ = level.Error(s.logger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
+	}
+}
+
+func handleGRPCResponse(statusResponse *v1.StatusResponse, err error, target string) (string, error) {
 	switch {
 	case err != nil:
-		err = errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", details.Target))
-		response.internalServerError(err.Error(), s.logger)
+		return "", errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", target))
 	case statusResponse.Status != v1.StatusResponse_SUCCESS:
-		response.internalServerError(fmt.Sprintf("Failure response from target {%s}", details.Target), s.logger)
+		return "", errors.New(fmt.Sprintf("Failure response from target {%s}", target))
 	default:
-		response.Message = fmt.Sprintf("Response from target {%s}, {%s}, {%s}", details.Target, statusResponse.Message, statusResponse.Status)
-		_ = level.Info(s.logger).Log("msg", response.Message)
-		if err = s.updateCache(serviceRequest, serviceClient, details.Target, action); err != nil {
-			_ = level.Error(s.logger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
-		}
+		return fmt.Sprintf("Response from target {%s}, {%s}, {%s}", target, statusResponse.Message, statusResponse.Status), nil
 	}
 }
 

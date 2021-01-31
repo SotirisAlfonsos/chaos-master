@@ -54,8 +54,10 @@ out=$(startDocker "zookeeper docker" "zookeeper" "127.0.0.1:8081" '"status":200'
 verifyOK $out
 
 printf "\n"%"s\n" "------------ Start CPU failure ------------"
-out=$(startCPUInjection "cpu_injection" 50 "127.0.0.1:8081" '"status":200')
+out=$(startCPUInjection "cpu_injection" 10 "127.0.0.1:8081" '"status":200')
 verifyOK $out
+
+sleep 1m
 
 printf "\n"%"s\n" "------------ Start not existing service and container ------------"
 out=$(startService "zookeeper_service" "test" "127.0.0.1:8081" '"status":500')
