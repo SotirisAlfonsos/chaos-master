@@ -44,8 +44,8 @@ func TestRecoverAllRequestSuccess(t *testing.T) { //nolint:dupl
 		{
 			message: "Successfully recover all items from cache",
 			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job,container,127.0.0.1":   functionWithSuccessResponse(),
-				"job,container_2,127.0.0.2": functionWithSuccessResponse(),
+				"job,127.0.0.1": functionWithSuccessResponse(),
+				"job,127.0.0.2": functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverAll: true},
@@ -55,9 +55,9 @@ func TestRecoverAllRequestSuccess(t *testing.T) { //nolint:dupl
 		{
 			message: "Successfully recover one item from the cache and record failure on the rest",
 			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job_1,container,127.0.0.1": functionWithSuccessResponse(),
-				"job,container_2,127.0.0.2": functionWithFailureResponse(),
-				"job,container,127.0.0.2":   functionWithErrorResponse(),
+				"job_1,127.0.0.1": functionWithSuccessResponse(),
+				"job,127.0.0.2":   functionWithFailureResponse(),
+				"job,127.0.0.3":   functionWithErrorResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverAll: true},
