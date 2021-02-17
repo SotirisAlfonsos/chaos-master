@@ -21,4 +21,4 @@ The master and bots focus on points <b>3</b> and <b>5</b>
 Start the chaos master providing a <i>config.file</i> that contains the job definitions. See an example of the file in the <i>config/example</i> folder.
 
 ### API
-See the api specification after starting the master at <i>\<host\>/chaos/api/v1/swagger</i>
+See the api specification after starting the master at <i>\<host\>/chaos/api/v1/swagger/index.html</i>

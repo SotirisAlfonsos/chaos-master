@@ -1,4 +1,4 @@
-package v1
+package recover
 
 import (
 	"bytes"
@@ -7,19 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"sort"
 	"testing"
 
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
-	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
-	"github.com/go-kit/kit/log"
-
 	"github.com/SotirisAlfonsos/chaos-master/cache"
+	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
+	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
+	"github.com/go-kit/kit/log"
 	"github.com/gorilla/mux"
-
-	"github.com/SotirisAlfonsos/chaos-master/config"
-	"github.com/SotirisAlfonsos/chaos-master/healthcheck"
-	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -36,7 +31,7 @@ type TestData struct {
 
 type expectedResult struct {
 	cacheSize int
-	payload   *RecoverResponsePayload
+	payload   *response.RecoverResponsePayload
 }
 
 func TestRecoverAllRequestSuccess(t *testing.T) { //nolint:dupl
@@ -205,7 +200,7 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 			alerts: []*Alert{{
 				Status: "unknown", Labels: Labels{RecoverAll: true},
 			}},
-			expected: &expectedResult{cacheSize: 1, payload: okResponse()},
+			expected: &expectedResult{cacheSize: 1, payload: badRequestResponse("The status {unknown} is not supported")},
 		},
 	}
 
@@ -217,12 +212,11 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 func assertSuccessfulRecovery(t *testing.T, dataItem TestData) {
 	t.Logf(dataItem.message)
 
-	apiRouter, err := defaultAPIRouterWithCacheItems(make(map[string]*config.Job), &network.Connections{}, dataItem.cacheItems)
+	cacheManager := cache.NewCacheManager(logger)
+	server, err := recoverHTTPTestServerWithCacheItems(cacheManager, dataItem.cacheItems)
 	if err != nil {
-		t.Fatalf("Could not prepare cache for test. %s", err)
+		t.Fatal(err)
 	}
-
-	server := recoverHTTPTestServer(apiRouter)
 	requestPayload := newRequestPayload(dataItem.alerts)
 
 	responsePayload, err := restorePostCall(server, requestPayload)
@@ -232,44 +226,31 @@ func assertSuccessfulRecovery(t *testing.T, dataItem TestData) {
 
 	assert.Equal(t, dataItem.expected.payload.Status, responsePayload.Status)
 	assert.Equal(t, len(dataItem.expected.payload.RecoverMessage), len(responsePayload.RecoverMessage))
-	assert.Equal(t, dataItem.expected.payload.getSortedStatuses(), responsePayload.getSortedStatuses())
-	assert.Equal(t, dataItem.expected.cacheSize, apiRouter.cache.ItemCount())
+	assert.Equal(t, dataItem.expected.payload.GetSortedStatuses(), responsePayload.GetSortedStatuses())
+	assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
 }
 
-func (recoverR *RecoverResponsePayload) getSortedStatuses() []string {
-	statuses := make([]string, 0)
-	for _, recoverMessage := range recoverR.RecoverMessage {
-		statuses = append(statuses, recoverMessage.Status)
-	}
-	sort.Strings(statuses)
-	return statuses
-}
-
-func defaultAPIRouterWithCacheItems(
-	jobMap map[string]*config.Job,
-	connections *network.Connections,
-	cacheItems map[*cache.Key]func() (*v1.StatusResponse, error),
-) (*APIRouter, error) {
-	apiRouter := NewAPIRouter(jobMap, connections, cache.NewCacheManager(logger), logger)
-
-	for key, val := range cacheItems {
-		err := apiRouter.cache.Register(key, val)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return apiRouter, nil
-}
-
-func okResponse(statuses ...string) *RecoverResponsePayload {
-	recoverMessages := make([]*RecoverMessage, 0)
+func okResponse(statuses ...string) *response.RecoverResponsePayload {
+	recoverMessages := make([]*response.RecoverMessage, 0, len(statuses))
 	for _, status := range statuses {
-		recoverMessages = append(recoverMessages, &RecoverMessage{Status: status})
+		recoverMessages = append(recoverMessages, &response.RecoverMessage{Status: status})
 	}
-	return &RecoverResponsePayload{
+	return &response.RecoverResponsePayload{
 		RecoverMessage: recoverMessages,
 		Status:         200,
+	}
+}
+
+func badRequestResponse(message string) *response.RecoverResponsePayload {
+	recoverMessage := &response.RecoverMessage{
+		Message: message,
+		Status:  "FAILURE",
+	}
+	recoverMessages := make([]*response.RecoverMessage, 0, 1)
+	recoverMessages = append(recoverMessages, recoverMessage)
+	return &response.RecoverResponsePayload{
+		RecoverMessage: recoverMessages,
+		Status:         400,
 	}
 }
 
@@ -291,11 +272,27 @@ func functionWithErrorResponse() func() (*v1.StatusResponse, error) {
 	}
 }
 
-func recoverHTTPTestServer(apiRouter *APIRouter) *httptest.Server {
+func recoverHTTPTestServerWithCacheItems(
+	cacheManager *cache.Manager,
+	cacheItems map[*cache.Key]func() (*v1.StatusResponse, error),
+) (*httptest.Server, error) {
+	for key, val := range cacheItems {
+		err := cacheManager.Register(key, val)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	rController := &RController{
+		cacheManager: cacheManager,
+		logger:       logger,
+	}
+
 	router := mux.NewRouter()
-	router = apiRouter.AddRoutes(&healthcheck.HealthChecker{}, router)
-	router.Schemes("http")
-	return httptest.NewServer(router)
+	router.HandleFunc("/recover/alertmanager", rController.RecoverActionAlertmanagerWebHook).
+		Methods("POST")
+
+	return httptest.NewServer(router), nil
 }
 
 func newRequestPayload(alerts []*Alert) *requestPayload {
@@ -304,26 +301,26 @@ func newRequestPayload(alerts []*Alert) *requestPayload {
 	}
 }
 
-func restorePostCall(server *httptest.Server, requestPayload *requestPayload) (*RecoverResponsePayload, error) {
+func restorePostCall(server *httptest.Server, requestPayload *requestPayload) (*response.RecoverResponsePayload, error) {
 	requestBody, _ := json.Marshal(requestPayload)
-	url := server.URL + "/chaos/api/v1/recover/alertmanager"
+	url := server.URL + "/recover/alertmanager"
 
 	return post(requestBody, url)
 }
 
-func post(requestBody []byte, url string) (*RecoverResponsePayload, error) {
+func post(requestBody []byte, url string) (*response.RecoverResponsePayload, error) {
 	resp, err := http.Post(url, "", bytes.NewReader(requestBody)) //nolint:gosec
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	response := &RecoverResponsePayload{}
-	err = json.NewDecoder(resp.Body).Decode(&response)
+	respPayload := &response.RecoverResponsePayload{}
+	err = json.NewDecoder(resp.Body).Decode(&respPayload)
 	if err != nil {
-		return &RecoverResponsePayload{Status: resp.StatusCode}, err
+		return &response.RecoverResponsePayload{Status: resp.StatusCode}, err
 	}
-	return response, nil
+	return respPayload, nil
 }
 
 func getLogger() log.Logger {

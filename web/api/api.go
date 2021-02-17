@@ -7,13 +7,12 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/go-kit/kit/log"
-
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/SotirisAlfonsos/chaos-master/healthcheck"
 	"github.com/SotirisAlfonsos/chaos-master/network"
 	v1 "github.com/SotirisAlfonsos/chaos-master/web/api/v1"
+	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/gorilla/mux"
 )

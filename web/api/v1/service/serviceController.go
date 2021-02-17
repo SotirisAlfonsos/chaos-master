@@ -1,11 +1,12 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
 
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
@@ -75,12 +76,6 @@ type RequestPayload struct {
 	Target      string `json:"target"`
 }
 
-type ResponsePayload struct {
-	Message string `json:"message"`
-	Error   string `json:"error"`
-	Status  int    `json:"status"`
-}
-
 func newServiceRequest(details *RequestPayload) *v1.ServiceRequest {
 	return &v1.ServiceRequest{
 		JobName:              details.Job,
@@ -104,44 +99,46 @@ func newServiceRequest(details *RequestPayload) *v1.ServiceRequest {
 // @Failure 500 {object} ResponsePayload
 // @Router /service [post]
 func (s *SController) ServiceAction(w http.ResponseWriter, r *http.Request) {
-	response := newDefaultResponse()
+	resp := response.NewDefaultResponse()
 
 	requestPayload := &RequestPayload{}
 	err := json.NewDecoder(r.Body).Decode(&requestPayload)
 	if err != nil {
-		response.badRequest("Could not decode request body", s.logger)
-		setResponseInWriter(w, response, s.logger)
+		resp.BadRequest("Could not decode request body", s.logger)
+		resp.SetInWriter(w, s.logger)
 		return
 	}
 
 	action, err := toActionEnum(r.FormValue("action"))
 	if err != nil {
-		response.badRequest(err.Error(), s.logger)
-		setResponseInWriter(w, response, s.logger)
+		resp.BadRequest(err.Error(), s.logger)
+		resp.SetInWriter(w, s.logger)
+		return
+	}
+
+	_ = level.Info(s.logger).Log("msg", fmt.Sprintf("%s service with name {%s}", action, requestPayload.ServiceName))
+
+	job, ok := s.jobs[requestPayload.Job]
+	if !ok {
+		resp.BadRequest(fmt.Sprintf("Could not find job {%s}", requestPayload.Job), s.logger)
+		resp.SetInWriter(w, s.logger)
 		return
 	}
 
 	serviceExists := false
-
-	_ = level.Info(s.logger).Log("msg", fmt.Sprintf("%s service with name {%s}", action, requestPayload.ServiceName))
-
-	if job, ok := s.jobs[requestPayload.Job]; ok {
-		for _, target := range job.Target {
-			if target == requestPayload.Target && job.ComponentName == requestPayload.ServiceName {
-				serviceRequest := newServiceRequest(requestPayload)
-				s.performAction(action, s.connectionPool[target], serviceRequest, requestPayload.Target, response)
-				serviceExists = true
-			}
+	for _, target := range job.Target {
+		if target == requestPayload.Target && job.ComponentName == requestPayload.ServiceName {
+			serviceRequest := newServiceRequest(requestPayload)
+			s.performAction(action, s.connectionPool[target], serviceRequest, requestPayload.Target, resp)
+			serviceExists = true
 		}
-
-		if !serviceExists {
-			response.badRequest(fmt.Sprintf("Service {%s} is not registered for target {%s}", requestPayload.ServiceName, requestPayload.Target), s.logger)
-		}
-	} else {
-		response.badRequest(fmt.Sprintf("Could not find job {%s}", requestPayload.Job), s.logger)
 	}
 
-	setResponseInWriter(w, response, s.logger)
+	if !serviceExists {
+		resp.BadRequest(fmt.Sprintf("Service {%s} is not registered for target {%s}", requestPayload.ServiceName, requestPayload.Target), s.logger)
+	}
+
+	resp.SetInWriter(w, s.logger)
 }
 
 func (s *SController) performAction(
@@ -149,7 +146,7 @@ func (s *SController) performAction(
 	sConnection *sConnection,
 	serviceRequest *v1.ServiceRequest,
 	target string,
-	response *ResponsePayload,
+	resp *response.Payload,
 ) {
 	var statusResponse *v1.StatusResponse
 	var err error
@@ -157,7 +154,7 @@ func (s *SController) performAction(
 	serviceClient, err := sConnection.connection.GetServiceClient(target)
 	if err != nil {
 		err = errors.Wrap(err, fmt.Sprintf("Can not get service connection from target {%s}", target))
-		response.internalServerError(err.Error(), s.logger)
+		resp.InternalServerError(err.Error(), s.logger)
 		return
 	}
 
@@ -167,18 +164,18 @@ func (s *SController) performAction(
 	case stop:
 		statusResponse, err = serviceClient.Stop(context.Background(), serviceRequest)
 	default:
-		response.badRequest(fmt.Sprintf("Action {%s} not allowed", action), s.logger)
+		resp.BadRequest(fmt.Sprintf("Action {%s} not allowed", action), s.logger)
 		return
 	}
 
 	message, err := handleGRPCResponse(statusResponse, err, target)
 	if err != nil {
-		response.internalServerError(err.Error(), s.logger)
+		resp.InternalServerError(err.Error(), s.logger)
 		return
 	}
 
-	response.Message = message
-	_ = level.Info(s.logger).Log("msg", response.Message)
+	resp.Message = message
+	_ = level.Info(s.logger).Log("msg", resp.Message)
 
 	if err = s.updateCache(serviceRequest, serviceClient, target, action); err != nil {
 		_ = level.Error(s.logger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
@@ -213,43 +210,5 @@ func (s *SController) updateCache(serviceRequest *v1.ServiceRequest, serviceClie
 		return s.cacheManager.Register(key, recoveryFunc)
 	default:
 		return errors.New(fmt.Sprintf("Action %s not supported for cache operation", action))
-	}
-}
-
-func newDefaultResponse() *ResponsePayload {
-	return &ResponsePayload{
-		Message: "",
-		Error:   "",
-		Status:  200,
-	}
-}
-
-func (r *ResponsePayload) internalServerError(message string, logger log.Logger) {
-	r.Error = message
-	r.Status = 500
-	_ = level.Error(logger).Log("msg", "Internal server error", "err", message)
-}
-
-func (r *ResponsePayload) badRequest(message string, logger log.Logger) {
-	r.Error = message
-	r.Status = 400
-	_ = level.Warn(logger).Log("msg", "Bad request", "warn", message)
-}
-
-func setResponseInWriter(w http.ResponseWriter, resp *ResponsePayload, logger log.Logger) {
-	reqBodyBytes := new(bytes.Buffer)
-	err := json.NewEncoder(reqBodyBytes).Encode(resp)
-	if err != nil {
-		_ = level.Error(logger).Log("msg", "Error when trying to encode response to byte array", "err", err)
-		w.WriteHeader(500)
-		return
-	}
-
-	w.WriteHeader(resp.Status)
-	_, err = w.Write(reqBodyBytes.Bytes())
-	if err != nil {
-		_ = level.Error(logger).Log("msg", "Error when trying to write response to byte array", "err", err)
-		w.WriteHeader(500)
-		return
 	}
 }

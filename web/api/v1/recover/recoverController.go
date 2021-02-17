@@ -1,4 +1,4 @@
-package v1
+package recover
 
 import (
 	"encoding/json"
@@ -8,8 +8,8 @@ import (
 
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
+	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
 	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 )
 
@@ -36,25 +36,25 @@ func NewRecoverController(cache *cache.Manager, logger log.Logger) *RController 
 // @Failure 400 {object} RecoverResponsePayload
 // @Router /recover/alertmanager [post]
 func (rController *RController) RecoverActionAlertmanagerWebHook(w http.ResponseWriter, r *http.Request) {
-	response := newDefaultRecoverResponse()
+	resp := response.NewDefaultRecoverResponse()
 
 	requestPayload := &requestPayload{}
 	err := json.NewDecoder(r.Body).Decode(&requestPayload)
 	if err != nil {
-		response.badRequest("Could not decode request body", rController.logger)
-		setRecoverResponseInWriter(w, response, rController.logger)
+		resp.BadRequest("Could not decode request body", rController.logger)
+		resp.SetInWriter(w, rController.logger)
 		return
 	}
 
 	for _, alert := range requestPayload.Alerts {
 		if status, err := toStatusEnum(alert.Status); status == firing && err == nil {
-			rController.performActionBasedOnLabels(alert.Labels, response)
+			rController.performActionBasedOnLabels(alert.Labels, resp)
 		} else if err != nil {
-			_ = level.Error(rController.logger).Log("msg", "Could not get status of incoming firing alert", "err", err)
+			resp.BadRequest(err.Error(), rController.logger)
 		}
 	}
 
-	setRecoverResponseInWriter(w, response, rController.logger)
+	resp.SetInWriter(w, rController.logger)
 }
 
 type requestPayload struct {
@@ -72,70 +72,75 @@ type Labels struct {
 	RecoverAll    bool   `json:"recoverAll,omitempty"`
 }
 
-func (rController *RController) performActionBasedOnLabels(labels Labels, response *RecoverResponsePayload) {
+func (rController *RController) performActionBasedOnLabels(labels Labels, resp *response.RecoverResponsePayload) {
 	items := rController.cacheManager.GetAll()
 
 	switch {
 	case labels.RecoverAll:
-		rController.recoverAll(items, response)
+		rController.recoverAll(items, resp)
 	case labels.RecoverJob != "":
-		rController.recoverJob(items, labels, response)
+		rController.recoverJob(items, labels, resp)
 	case labels.RecoverTarget != "":
-		rController.recoverTarget(items, labels, response)
+		rController.recoverTarget(items, labels, resp)
 	}
 }
 
-func (rController *RController) recoverAll(items cache.Items, response *RecoverResponsePayload) {
+func (rController *RController) recoverAll(items cache.Items, resp *response.RecoverResponsePayload) {
 	var wg sync.WaitGroup
 	for key, val := range items {
 		wg.Add(1)
-		rController.performAsync(key, val.Object.(func() (*v1.StatusResponse, error)), response, &wg)
+		rController.performAsync(key, val.Object.(func() (*v1.StatusResponse, error)), resp, &wg)
 	}
 	wg.Wait()
 }
 
-func (rController *RController) recoverJob(items cache.Items, labels Labels, response *RecoverResponsePayload) {
+func (rController *RController) recoverJob(items cache.Items, labels Labels, resp *response.RecoverResponsePayload) {
 	var wg sync.WaitGroup
 	for key, val := range items {
 		if key.Job == labels.RecoverJob {
 			wg.Add(1)
-			rController.performAsync(key, val.Object.(func() (*v1.StatusResponse, error)), response, &wg)
+			rController.performAsync(key, val.Object.(func() (*v1.StatusResponse, error)), resp, &wg)
 		}
 	}
 	wg.Wait()
 }
 
-func (rController *RController) recoverTarget(items cache.Items, labels Labels, response *RecoverResponsePayload) {
+func (rController *RController) recoverTarget(items cache.Items, labels Labels, resp *response.RecoverResponsePayload) {
 	var wg sync.WaitGroup
 	for key, val := range items {
 		if key.Target == labels.RecoverTarget {
 			wg.Add(1)
-			rController.performAsync(key, val.Object.(func() (*v1.StatusResponse, error)), response, &wg)
+			rController.performAsync(key, val.Object.(func() (*v1.StatusResponse, error)), resp, &wg)
 		}
 	}
 	wg.Wait()
 }
 
-func (rController *RController) performAsync(key cache.Key, val func() (*v1.StatusResponse, error), response *RecoverResponsePayload, wg *sync.WaitGroup) {
+func (rController *RController) performAsync(
+	key cache.Key,
+	val func() (*v1.StatusResponse, error),
+	resp *response.RecoverResponsePayload,
+	wg *sync.WaitGroup,
+) {
 	go func() {
 		defer wg.Done()
 		recoverMsg := action(&key, val, rController.cacheManager)
-		response.RecoverMessage = append(response.RecoverMessage, recoverMsg)
+		resp.RecoverMessage = append(resp.RecoverMessage, recoverMsg)
 	}()
 }
 
-func action(key *cache.Key, function func() (*v1.StatusResponse, error), cache *cache.Manager) *RecoverMessage {
+func action(key *cache.Key, function func() (*v1.StatusResponse, error), cache *cache.Manager) *response.RecoverMessage {
 	statusResponse, err := function()
 
 	switch {
 	case err != nil:
-		return failureRecoverResponse(errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", key.Target)).Error())
+		return response.FailureRecoverResponse(errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", key.Target)).Error())
 	case statusResponse.Status != v1.StatusResponse_SUCCESS:
-		return failureRecoverResponse(fmt.Sprintf("Failure response from target {%s}", key.Target))
+		return response.FailureRecoverResponse(fmt.Sprintf("Failure response from target {%s}", key.Target))
 	}
 	cache.Delete(key)
 	message := fmt.Sprintf("Response from target {%s}, {%s}, {%s}", key.Target, statusResponse.Message, statusResponse.Status)
-	return successRecoverResponse(message)
+	return response.SuccessRecoverResponse(message)
 }
 
 type alertStatus int

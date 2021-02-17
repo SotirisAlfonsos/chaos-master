@@ -7,6 +7,7 @@ import (
 	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/cpu"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/docker"
+	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/recover"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/service"
 	"github.com/go-kit/kit/log"
 	"github.com/gorilla/mux"
@@ -16,7 +17,7 @@ import (
 type APIRouter struct {
 	jobMap      map[string]*config.Job
 	connections *network.Connections
-	cache       *cache.Manager
+	Cache       *cache.Manager
 	logger      log.Logger
 }
 
@@ -29,7 +30,7 @@ func NewAPIRouter(
 	return &APIRouter{
 		jobMap:      jobMap,
 		connections: connections,
-		cache:       cache,
+		Cache:       cache,
 		logger:      logger,
 	}
 }
@@ -53,7 +54,7 @@ func setBotRouters(router *mux.Router, r *APIRouter) {
 }
 
 func setRecoverRouter(router *mux.Router, r *APIRouter) {
-	rController := NewRecoverController(r.cache, r.logger)
+	rController := recover.NewRecoverController(r.Cache, r.logger)
 	router.HandleFunc("/recover/alertmanager", rController.RecoverActionAlertmanagerWebHook).
 		Methods("POST")
 }
@@ -64,21 +65,21 @@ func setStatusRouter(healthChecker *healthcheck.HealthChecker, router *mux.Route
 }
 
 func serviceControllerRouter(router *mux.Router, r *APIRouter) {
-	sController := service.NewServiceController(filterJobsOnType(r.jobMap, config.Service), r.connections, r.cache, r.logger)
+	sController := service.NewServiceController(filterJobsOnType(r.jobMap, config.Service), r.connections, r.Cache, r.logger)
 	router.HandleFunc("/service", sController.ServiceAction).
 		Queries("action", "{action}").
 		Methods("POST")
 }
 
 func dockerControllerRouter(router *mux.Router, r *APIRouter) {
-	dController := docker.NewDockerController(filterJobsOnType(r.jobMap, config.Docker), r.connections, r.cache, r.logger)
+	dController := docker.NewDockerController(filterJobsOnType(r.jobMap, config.Docker), r.connections, r.Cache, r.logger)
 	router.HandleFunc("/docker", dController.DockerAction).
 		Queries("action", "{action}").
 		Methods("POST")
 }
 
 func cpuControllerRouter(router *mux.Router, r *APIRouter) {
-	cController := cpu.NewCPUController(filterJobsOnType(r.jobMap, config.CPU), r.connections, r.cache, r.logger)
+	cController := cpu.NewCPUController(filterJobsOnType(r.jobMap, config.CPU), r.connections, r.Cache, r.logger)
 	router.HandleFunc("/cpu", cController.CPUAction).
 		Queries("action", "{action}").
 		Methods("POST")

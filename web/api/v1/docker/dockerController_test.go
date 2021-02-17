@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
+
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
@@ -36,7 +38,7 @@ type TestData struct {
 
 type expectedResult struct {
 	cacheSize int
-	payload   *ResponsePayload
+	payload   *response.Payload
 }
 
 type mockDockerClient struct {
@@ -545,22 +547,22 @@ func TestDockerActionForRandomTargetWithInvalidDo(t *testing.T) {
 	}
 }
 
-func okResponse(message string) *ResponsePayload {
-	return &ResponsePayload{
+func okResponse(message string) *response.Payload {
+	return &response.Payload{
 		Message: message,
 		Status:  200,
 	}
 }
 
-func badRequestResponse(error string) *ResponsePayload {
-	return &ResponsePayload{
+func badRequestResponse(error string) *response.Payload {
+	return &response.Payload{
 		Error:  error,
 		Status: 400,
 	}
 }
 
-func internalServerErrorResponse(error string) *ResponsePayload {
-	return &ResponsePayload{
+func internalServerErrorResponse(error string) *response.Payload {
+	return &response.Payload{
 		Error:  error,
 		Status: 500,
 	}
@@ -581,14 +583,14 @@ func assertRandomActionPerformed(t *testing.T, dataItem TestDataForRandomDocker,
 		t.Fatal(err)
 	}
 
-	response, err := dockerPostCallNoTarget(server, dataItem.requestPayload, do, action)
+	resp, err := dockerPostCallNoTarget(server, dataItem.requestPayload, do, action)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, dataItem.expected.payload.Status, response.Status)
-	assert.Regexp(t, regexp.MustCompile(dataItem.expected.payload.Message), response.Message)
-	assert.Regexp(t, regexp.MustCompile(dataItem.expected.payload.Error), response.Error)
+	assert.Equal(t, dataItem.expected.payload.Status, resp.Status)
+	assert.Regexp(t, regexp.MustCompile(dataItem.expected.payload.Message), resp.Message)
+	assert.Regexp(t, regexp.MustCompile(dataItem.expected.payload.Error), resp.Error)
 	assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
 
 	server.Close()
@@ -626,14 +628,14 @@ func withFailureToSetDockerConnection(errorMessage string) *dConnection {
 	}
 }
 
-func dockerPostCall(server *httptest.Server, details *RequestPayload, action string) (*ResponsePayload, error) {
+func dockerPostCall(server *httptest.Server, details *RequestPayload, action string) (*response.Payload, error) {
 	requestBody, _ := json.Marshal(details)
 	url := server.URL + "/docker?action=" + action
 
 	return post(requestBody, url)
 }
 
-func dockerPostCallNoTarget(server *httptest.Server, details *RequestPayloadNoTarget, do string, action string) (*ResponsePayload, error) {
+func dockerPostCallNoTarget(server *httptest.Server, details *RequestPayloadNoTarget, do string, action string) (*response.Payload, error) {
 	requestBody, _ := json.Marshal(details)
 	var url string
 	if do != "" {
@@ -645,19 +647,19 @@ func dockerPostCallNoTarget(server *httptest.Server, details *RequestPayloadNoTa
 	return post(requestBody, url)
 }
 
-func post(requestBody []byte, url string) (*ResponsePayload, error) {
+func post(requestBody []byte, url string) (*response.Payload, error) {
 	resp, err := http.Post(url, "", bytes.NewReader(requestBody)) //nolint:gosec
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	response := &ResponsePayload{}
-	err = json.NewDecoder(resp.Body).Decode(&response)
+	respPayload := &response.Payload{}
+	err = json.NewDecoder(resp.Body).Decode(&respPayload)
 	if err != nil {
-		return &ResponsePayload{Status: resp.StatusCode}, err
+		return &response.Payload{Status: resp.StatusCode}, err
 	}
-	return response, nil
+	return respPayload, nil
 }
 
 func newDockerJob(componentName string, targets ...string) *config.Job {
