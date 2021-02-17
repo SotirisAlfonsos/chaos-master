@@ -3,9 +3,10 @@ package docker
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"net/http"
 
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
@@ -277,22 +278,31 @@ func setResponseInWriter(w http.ResponseWriter, resp *ResponsePayload, logger lo
 
 func getRandomTarget(targets []string) (string, error) {
 	if len(targets) > 0 {
-		return targets[rand.Intn(len(targets))], nil
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(targets))))
+		if err != nil {
+			return "", err
+		}
+
+		return targets[num.Int64()], nil
 	}
 	return "", errors.New("No targets available")
 }
 
 func (d *DController) updateCache(dockerRequest *v1.DockerRequest, dockerClient v1.DockerClient, target string, action action) error {
-	uniqueName := fmt.Sprintf("%s,%s", dockerRequest.JobName, target)
+	key := &cache.Key{
+		Job:    dockerRequest.JobName,
+		Target: target,
+	}
+
 	switch action {
 	case start:
-		d.cacheManager.Delete(uniqueName)
+		d.cacheManager.Delete(key)
 		return nil
 	case stop:
 		recoveryFunc := func() (*v1.StatusResponse, error) {
 			return dockerClient.Start(context.Background(), dockerRequest)
 		}
-		return d.cacheManager.Register(uniqueName, recoveryFunc)
+		return d.cacheManager.Register(key, recoveryFunc)
 	default:
 		return errors.New(fmt.Sprintf("Action %s not supported for cache operation", action))
 	}

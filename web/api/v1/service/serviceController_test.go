@@ -28,7 +28,7 @@ type TestData struct {
 	message        string
 	jobMap         map[string]*config.Job
 	connectionPool map[string]*sConnection
-	cacheItems     map[string]func() (*v1.StatusResponse, error)
+	cacheItems     map[*cache.Key]func() (*v1.StatusResponse, error)
 	requestPayload *RequestPayload
 	expected       *expectedResult
 }
@@ -119,8 +119,8 @@ func TestStartServiceSuccess(t *testing.T) {
 			connectionPool: map[string]*sConnection{
 				"127.0.0.1": withSuccessServiceConnection(),
 			},
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
@@ -144,8 +144,8 @@ func TestStopServiceSuccess(t *testing.T) {
 				"127.0.0.1": withSuccessServiceConnection(),
 				"127.0.0.2": withSuccessServiceConnection(),
 			},
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,127.0.0.2": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 2, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
@@ -158,8 +158,8 @@ func TestStopServiceSuccess(t *testing.T) {
 			connectionPool: map[string]*sConnection{
 				"127.0.0.1": withSuccessServiceConnection(),
 			},
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			requestPayload: &RequestPayload{Job: "job name", ServiceName: "service name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
@@ -370,7 +370,7 @@ func serviceHTTPTestServerWithCacheItems(
 	jobMap map[string]*config.Job,
 	connectionPool map[string]*sConnection,
 	cacheManager *cache.Manager,
-	cacheItems map[string]func() (*v1.StatusResponse, error),
+	cacheItems map[*cache.Key]func() (*v1.StatusResponse, error),
 ) (*httptest.Server, error) {
 	for key, val := range cacheItems {
 		err := cacheManager.Register(key, val)

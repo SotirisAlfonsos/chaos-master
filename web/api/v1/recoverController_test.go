@@ -29,7 +29,7 @@ var (
 
 type TestData struct {
 	message    string
-	cacheItems map[string]func() (*v1.StatusResponse, error)
+	cacheItems map[*cache.Key]func() (*v1.StatusResponse, error)
 	alerts     []*Alert
 	expected   *expectedResult
 }
@@ -43,9 +43,9 @@ func TestRecoverAllRequestSuccess(t *testing.T) { //nolint:dupl
 	dataItems := []TestData{
 		{
 			message: "Successfully recover all items from cache",
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job,127.0.0.1": functionWithSuccessResponse(),
-				"job,127.0.0.2": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job", Target: "127.0.0.1"}: functionWithSuccessResponse(),
+				&cache.Key{Job: "job", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverAll: true},
@@ -54,10 +54,10 @@ func TestRecoverAllRequestSuccess(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Successfully recover one item from the cache and record failure on the rest",
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job_1,127.0.0.1": functionWithSuccessResponse(),
-				"job,127.0.0.2":   functionWithFailureResponse(),
-				"job,127.0.0.3":   functionWithErrorResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job_1", Target: "127.0.0.1"}: functionWithSuccessResponse(),
+				&cache.Key{Job: "job", Target: "127.0.0.2"}:   functionWithFailureResponse(),
+				&cache.Key{Job: "job", Target: "127.0.0.3"}:   functionWithErrorResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverAll: true},
@@ -66,7 +66,7 @@ func TestRecoverAllRequestSuccess(t *testing.T) { //nolint:dupl
 		},
 		{
 			message:    "Should not do anything and return ok for cache already empty",
-			cacheItems: map[string]func() (*v1.StatusResponse, error){},
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverAll: true},
 			}},
@@ -83,10 +83,10 @@ func TestRecoverJobRequestSuccess(t *testing.T) { //nolint:dupl
 	dataItems := []TestData{
 		{
 			message: "Successfully recover all items from cache for job {job name}, while not removing other jobs",
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,container,127.0.0.1":             functionWithSuccessResponse(),
-				"job name,container_2,127.0.0.2":           functionWithSuccessResponse(),
-				"job different name,container_2,127.0.0.2": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
+				&cache.Key{Job: "job name", Target: "127.0.0.2"}:           functionWithSuccessResponse(),
+				&cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverJob: "job name"},
@@ -95,11 +95,11 @@ func TestRecoverJobRequestSuccess(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Successfully recover one item from the cache and record failure on the rest for job {job name}, while not removing other jobs",
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,container,127.0.0.1":           functionWithSuccessResponse(),
-				"job name,container_2,127.0.0.2":         functionWithFailureResponse(),
-				"job name,container,127.0.0.2":           functionWithErrorResponse(),
-				"job different name,container,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
+				&cache.Key{Job: "job name", Target: "127.0.0.2"}:           functionWithFailureResponse(),
+				&cache.Key{Job: "job name", Target: "127.0.0.3"}:           functionWithErrorResponse(),
+				&cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverJob: "job name"},
@@ -108,8 +108,8 @@ func TestRecoverJobRequestSuccess(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Should not do anything and return ok for job {job name} not in cache",
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job different name,container,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverJob: "job name"},
@@ -127,10 +127,10 @@ func TestRecoverTargetRequestSuccess(t *testing.T) { //nolint:dupl
 	dataItems := []TestData{
 		{
 			message: "Successfully recover all items from cache for target {127.0.0.1}, while not removing other jobs",
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,127.0.0.1":           functionWithSuccessResponse(),
-				"job different name,127.0.0.1": functionWithSuccessResponse(),
-				"job different name,127.0.0.2": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
+				&cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
+				&cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverTarget: "127.0.0.1"},
@@ -139,11 +139,11 @@ func TestRecoverTargetRequestSuccess(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Successfully recover one item from the cache and record failure on the rest for target {127.0.0.1}, while not removing other jobs",
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,127.0.0.1":           functionWithSuccessResponse(),
-				"job other name,127.0.0.1":     functionWithFailureResponse(),
-				"job different name,127.0.0.1": functionWithErrorResponse(),
-				"job different name,127.0.0.2": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
+				&cache.Key{Job: "job other name", Target: "127.0.0.1"}:     functionWithFailureResponse(),
+				&cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithErrorResponse(),
+				&cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverTarget: "127.0.0.1"},
@@ -152,8 +152,8 @@ func TestRecoverTargetRequestSuccess(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Should not do anything and return ok for target {127.0.0.1} not in cache",
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job different name,container,127.0.0.2": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverTarget: "127.0.0.1"},
@@ -171,10 +171,10 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 	dataItems := []TestData{
 		{
 			message: "Successfully recover items on firing and ignore resolved alerts, resulting in two jobs recovered",
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,127.0.0.1":           functionWithSuccessResponse(),
-				"job different name,127.0.0.1": functionWithSuccessResponse(),
-				"job different name,127.0.0.2": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
+				&cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
+				&cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{
 				{Status: "firing", Labels: Labels{RecoverTarget: "127.0.0.1"}},
@@ -186,9 +186,9 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Should not do anything for resolved alerts, no items should be removed from cache",
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,127.0.0.1":       functionWithSuccessResponse(),
-				"job other name,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.1"}:       functionWithSuccessResponse(),
+				&cache.Key{Job: "job other name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{
 				{Status: "resolved", Labels: Labels{RecoverTarget: "127.0.0.1"}},
@@ -199,8 +199,8 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 		},
 		{
 			message: "Should not do anything for unknown alert status, no items should be removed from cache",
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job different name,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "unknown", Labels: Labels{RecoverAll: true},
@@ -248,7 +248,7 @@ func (recoverR *RecoverResponsePayload) getSortedStatuses() []string {
 func defaultAPIRouterWithCacheItems(
 	jobMap map[string]*config.Job,
 	connections *network.Connections,
-	cacheItems map[string]func() (*v1.StatusResponse, error),
+	cacheItems map[*cache.Key]func() (*v1.StatusResponse, error),
 ) (*APIRouter, error) {
 	apiRouter := NewAPIRouter(jobMap, connections, cache.NewCacheManager(logger), logger)
 

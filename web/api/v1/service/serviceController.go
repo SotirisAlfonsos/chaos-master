@@ -197,16 +197,20 @@ func handleGRPCResponse(statusResponse *v1.StatusResponse, err error, target str
 }
 
 func (s *SController) updateCache(serviceRequest *v1.ServiceRequest, serviceClient v1.ServiceClient, target string, action action) error {
-	uniqueName := fmt.Sprintf("%s,%s", serviceRequest.JobName, target)
+	key := &cache.Key{
+		Job:    serviceRequest.JobName,
+		Target: target,
+	}
+
 	switch action {
 	case start:
-		s.cacheManager.Delete(uniqueName)
+		s.cacheManager.Delete(key)
 		return nil
 	case stop:
 		recoveryFunc := func() (*v1.StatusResponse, error) {
 			return serviceClient.Start(context.Background(), serviceRequest)
 		}
-		return s.cacheManager.Register(uniqueName, recoveryFunc)
+		return s.cacheManager.Register(key, recoveryFunc)
 	default:
 		return errors.New(fmt.Sprintf("Action %s not supported for cache operation", action))
 	}

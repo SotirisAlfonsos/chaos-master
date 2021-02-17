@@ -205,15 +205,19 @@ func setResponseInWriter(w http.ResponseWriter, resp *ResponsePayload, logger lo
 }
 
 func (c *CController) updateCache(cpuClient v1.CPUClient, request *RequestPayload, action action) error {
-	uniqueName := fmt.Sprintf("%s,%s", request.Job, request.Target)
+	key := &cache.Key{
+		Job:    request.Job,
+		Target: request.Target,
+	}
+
 	switch action {
 	case start:
 		recoveryFunc := func() (*v1.StatusResponse, error) {
 			return cpuClient.Stop(context.Background(), newCPURequest(request))
 		}
-		return c.cacheManager.Register(uniqueName, recoveryFunc)
+		return c.cacheManager.Register(key, recoveryFunc)
 	case stop:
-		c.cacheManager.Delete(uniqueName)
+		c.cacheManager.Delete(key)
 		return nil
 	default:
 		return errors.New(fmt.Sprintf("Action %s not supported for cache operation", action))

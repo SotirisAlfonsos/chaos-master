@@ -29,7 +29,7 @@ type TestData struct {
 	message        string
 	jobMap         map[string]*config.Job
 	connectionPool map[string]*dConnection
-	cacheItems     map[string]func() (*v1.StatusResponse, error)
+	cacheItems     map[*cache.Key]func() (*v1.StatusResponse, error)
 	requestPayload *RequestPayload
 	expected       *expectedResult
 }
@@ -120,8 +120,8 @@ func TestStartDockerSuccess(t *testing.T) {
 			connectionPool: map[string]*dConnection{
 				"127.0.0.1": withSuccessDockerConnection(),
 			},
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
@@ -145,8 +145,8 @@ func TestStopDockerSuccess(t *testing.T) {
 				"127.0.0.1": withSuccessDockerConnection(),
 				"127.0.0.2": withSuccessDockerConnection(),
 			},
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,127.0.0.2": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 2, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
@@ -159,8 +159,8 @@ func TestStopDockerSuccess(t *testing.T) {
 			connectionPool: map[string]*dConnection{
 				"127.0.0.1": withSuccessDockerConnection(),
 			},
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			requestPayload: &RequestPayload{Job: "job name", Container: "container name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
@@ -331,7 +331,7 @@ type TestDataForRandomDocker struct {
 	message        string
 	jobMap         map[string]*config.Job
 	connectionPool map[string]*dConnection
-	cacheItems     map[string]func() (*v1.StatusResponse, error)
+	cacheItems     map[*cache.Key]func() (*v1.StatusResponse, error)
 	requestPayload *RequestPayloadNoTarget
 	expected       *expectedResult
 }
@@ -359,8 +359,8 @@ func TestStartRandomDockerSuccess(t *testing.T) {
 			connectionPool: map[string]*dConnection{
 				"127.0.0.1": withSuccessDockerConnection(),
 			},
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name"},
 			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
@@ -395,8 +395,8 @@ func TestStopRandomDockerSuccess(t *testing.T) {
 			connectionPool: map[string]*dConnection{
 				"127.0.0.1": withSuccessDockerConnection(),
 			},
-			cacheItems: map[string]func() (*v1.StatusResponse, error){
-				"job name,127.0.0.1": functionWithSuccessResponse(),
+			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
+				&cache.Key{Job: "job name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			requestPayload: &RequestPayloadNoTarget{Job: "job name", Container: "container name"},
 			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
@@ -672,7 +672,7 @@ func dockerHTTPTestServerWithCacheItems(
 	jobMap map[string]*config.Job,
 	connectionPool map[string]*dConnection,
 	cacheManager *cache.Manager,
-	cacheItems map[string]func() (*v1.StatusResponse, error),
+	cacheItems map[*cache.Key]func() (*v1.StatusResponse, error),
 ) (*httptest.Server, error) {
 	for key, val := range cacheItems {
 		err := cacheManager.Register(key, val)
