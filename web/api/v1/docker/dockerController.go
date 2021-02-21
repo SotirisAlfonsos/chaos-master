@@ -112,9 +112,9 @@ func newDockerRequestNoTarget(details *RequestPayloadNoTarget) *v1.DockerRequest
 // @Param do query string false "Specify to perform action for container on random target"
 // @Param action query string true "Specify to perform a start or a stop on the specified container"
 // @Param requestPayload body RequestPayload true "Specify the job name, container name and target"
-// @Success 200 {object} ResponsePayload
-// @Failure 400 {object} ResponsePayload
-// @Failure 500 {object} ResponsePayload
+// @Success 200 {object} response.Payload
+// @Failure 400 {object} response.Payload
+// @Failure 500 {object} response.Payload
 // @Router /docker [post]
 func (d *DController) DockerAction(w http.ResponseWriter, r *http.Request) {
 	do := r.FormValue("do")
@@ -122,6 +122,9 @@ func (d *DController) DockerAction(w http.ResponseWriter, r *http.Request) {
 		d.randomDocker(w, r, do)
 		return
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	resp := response.NewDefaultResponse()
 
@@ -153,7 +156,7 @@ func (d *DController) DockerAction(w http.ResponseWriter, r *http.Request) {
 	for _, target := range job.Target {
 		if job.ComponentName == requestPayload.Container && target == requestPayload.Target {
 			dockerRequest := newDockerRequest(requestPayload)
-			d.performAction(action, dockerRequest, requestPayload.Target, resp)
+			d.performAction(ctx, action, dockerRequest, requestPayload.Target, resp)
 			dockerExists = true
 		}
 	}
@@ -165,47 +168,6 @@ func (d *DController) DockerAction(w http.ResponseWriter, r *http.Request) {
 	resp.SetInWriter(w, d.logger)
 }
 
-func (d *DController) performAction(
-	action action,
-	dockerRequest *v1.DockerRequest,
-	target string,
-	resp *response.Payload,
-) {
-	var statusResponse *v1.StatusResponse
-	var err error
-
-	dockerClient, err := d.connectionPool[target].connection.GetDockerClient(target)
-	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Can not get docker connection from target {%s}", target))
-		resp.InternalServerError(err.Error(), d.logger)
-		return
-	}
-
-	switch action {
-	case start:
-		statusResponse, err = dockerClient.Start(context.Background(), dockerRequest)
-	case stop:
-		statusResponse, err = dockerClient.Stop(context.Background(), dockerRequest)
-	default:
-		resp.BadRequest(fmt.Sprintf("Action {%s} not allowed", action), d.logger)
-		return
-	}
-
-	switch {
-	case err != nil:
-		err = errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", target))
-		resp.InternalServerError(err.Error(), d.logger)
-	case statusResponse.Status != v1.StatusResponse_SUCCESS:
-		resp.InternalServerError(fmt.Sprintf("Failure response from target {%s}", target), d.logger)
-	default:
-		resp.Message = fmt.Sprintf("Response from target {%s}, {%s}, {%s}", target, statusResponse.Message, statusResponse.Status)
-		_ = level.Info(d.logger).Log("msg", resp.Message)
-		if err = d.updateCache(dockerRequest, dockerClient, target, action); err != nil {
-			_ = level.Error(d.logger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
-		}
-	}
-}
-
 func (d *DController) randomDocker(w http.ResponseWriter, r *http.Request, do string) {
 	resp := response.NewDefaultResponse()
 
@@ -214,6 +176,9 @@ func (d *DController) randomDocker(w http.ResponseWriter, r *http.Request, do st
 		resp.SetInWriter(w, d.logger)
 		return
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	requestPayloadNoTarget := &RequestPayloadNoTarget{}
 	err := json.NewDecoder(r.Body).Decode(&requestPayloadNoTarget)
@@ -241,12 +206,54 @@ func (d *DController) randomDocker(w http.ResponseWriter, r *http.Request, do st
 		}
 
 		dockerRequest := newDockerRequestNoTarget(requestPayloadNoTarget)
-		d.performAction(action, dockerRequest, target, resp)
+		d.performAction(ctx, action, dockerRequest, target, resp)
 	} else {
 		resp.BadRequest(fmt.Sprintf("Could not find job {%s}", requestPayloadNoTarget.Job), d.logger)
 	}
 
 	resp.SetInWriter(w, d.logger)
+}
+
+func (d *DController) performAction(
+	ctx context.Context,
+	action action,
+	dockerRequest *v1.DockerRequest,
+	target string,
+	resp *response.Payload,
+) {
+	var statusResponse *v1.StatusResponse
+	var err error
+
+	dockerClient, err := d.connectionPool[target].connection.GetDockerClient(target)
+	if err != nil {
+		err = errors.Wrap(err, fmt.Sprintf("Can not get docker connection from target {%s}", target))
+		resp.InternalServerError(err.Error(), d.logger)
+		return
+	}
+
+	switch action {
+	case start:
+		statusResponse, err = dockerClient.Start(ctx, dockerRequest)
+	case stop:
+		statusResponse, err = dockerClient.Stop(ctx, dockerRequest)
+	default:
+		resp.BadRequest(fmt.Sprintf("Action {%s} not allowed", action), d.logger)
+		return
+	}
+
+	switch {
+	case err != nil:
+		err = errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", target))
+		resp.InternalServerError(err.Error(), d.logger)
+	case statusResponse.Status != v1.StatusResponse_SUCCESS:
+		resp.InternalServerError(fmt.Sprintf("Failure response from target {%s}", target), d.logger)
+	default:
+		resp.Message = fmt.Sprintf("Response from target {%s}, {%s}, {%s}", target, statusResponse.Message, statusResponse.Status)
+		_ = level.Info(d.logger).Log("msg", resp.Message)
+		if err = d.updateCache(dockerRequest, dockerClient, target, action); err != nil {
+			_ = level.Error(d.logger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
+		}
+	}
 }
 
 func validateAndGetTarget(requestPayloadNoTarget *RequestPayloadNoTarget, job config.Job) (string, error) {

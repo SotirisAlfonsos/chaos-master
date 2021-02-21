@@ -32,8 +32,8 @@ func NewRecoverController(cache *cache.Manager, logger log.Logger) *RController 
 // @Accept json
 // @Produce json
 // @Param requestPayload body requestPayload true "Create request payload that contains the recovery details"
-// @Success 200 {object} RecoverResponsePayload
-// @Failure 400 {object} RecoverResponsePayload
+// @Success 200 {object} response.RecoverResponsePayload
+// @Failure 400 {object} response.RecoverResponsePayload
 // @Router /recover/alertmanager [post]
 func (rController *RController) RecoverActionAlertmanagerWebHook(w http.ResponseWriter, r *http.Request) {
 	resp := response.NewDefaultRecoverResponse()

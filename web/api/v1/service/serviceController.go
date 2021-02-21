@@ -94,9 +94,9 @@ func newServiceRequest(details *RequestPayload) *v1.ServiceRequest {
 // @Produce json
 // @Param action query string true "Specify to perform a start or a stop on the specified service"
 // @Param requestPayload body RequestPayload true "Specify the job name, service name and target"
-// @Success 200 {object} ResponsePayload
-// @Failure 400 {object} ResponsePayload
-// @Failure 500 {object} ResponsePayload
+// @Success 200 {object} response.Payload
+// @Failure 400 {object} response.Payload
+// @Failure 500 {object} response.Payload
 // @Router /service [post]
 func (s *SController) ServiceAction(w http.ResponseWriter, r *http.Request) {
 	resp := response.NewDefaultResponse()

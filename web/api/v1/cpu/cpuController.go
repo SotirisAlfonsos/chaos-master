@@ -2,11 +2,12 @@ package cpu
 
 import "C"
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
 
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
@@ -76,12 +77,6 @@ type RequestPayload struct {
 	Target     string `json:"target"`
 }
 
-type ResponsePayload struct {
-	Message string `json:"message"`
-	Error   string `json:"error"`
-	Status  int    `json:"status"`
-}
-
 func newCPURequest(details *RequestPayload) *v1.CPURequest {
 	return &v1.CPURequest{
 		Percentage:           details.Percentage,
@@ -101,25 +96,25 @@ func newCPURequest(details *RequestPayload) *v1.CPURequest {
 // @Produce json
 // @Param action query string true "Specify to perform a start or a stop for the CPU injection"
 // @Param requestPayload body RequestPayload true "Specify the job name, percentage and target"
-// @Success 200 {object} ResponsePayload
-// @Failure 400 {object} ResponsePayload
-// @Failure 500 {object} ResponsePayload
+// @Success 200 {object} response.Payload
+// @Failure 400 {object} response.Payload
+// @Failure 500 {object} response.Payload
 // @Router /cpu [post]
 func (c *CController) CPUAction(w http.ResponseWriter, r *http.Request) {
-	response := newDefaultResponse()
+	resp := response.NewDefaultResponse()
 
 	requestPayload := &RequestPayload{}
 	err := json.NewDecoder(r.Body).Decode(&requestPayload)
 	if err != nil {
-		response.badRequest("Could not decode request body", c.logger)
-		setResponseInWriter(w, response, c.logger)
+		resp.BadRequest("Could not decode request body", c.logger)
+		resp.SetInWriter(w, c.logger)
 		return
 	}
 
 	action, err := toActionEnum(r.FormValue("action"))
 	if err != nil {
-		response.badRequest(err.Error(), c.logger)
-		setResponseInWriter(w, response, c.logger)
+		resp.BadRequest(err.Error(), c.logger)
+		resp.SetInWriter(w, c.logger)
 		return
 	}
 
@@ -130,26 +125,26 @@ func (c *CController) CPUAction(w http.ResponseWriter, r *http.Request) {
 	if job, ok := c.jobs[requestPayload.Job]; ok {
 		for _, target := range job.Target {
 			if target == requestPayload.Target {
-				c.performAction(action, c.connectionPool[target], requestPayload, response)
+				c.performAction(action, c.connectionPool[target], requestPayload, resp)
 				targetExists = true
 			}
 		}
 
 		if !targetExists {
-			response.badRequest(fmt.Sprintf("Target {%s} is not registered for job {%s}", requestPayload.Target, requestPayload.Job), c.logger)
+			resp.BadRequest(fmt.Sprintf("Target {%s} is not registered for job {%s}", requestPayload.Target, requestPayload.Job), c.logger)
 		}
 	} else {
-		response.badRequest(fmt.Sprintf("Could not find job {%s}", requestPayload.Job), c.logger)
+		resp.BadRequest(fmt.Sprintf("Could not find job {%s}", requestPayload.Job), c.logger)
 	}
 
-	setResponseInWriter(w, response, c.logger)
+	resp.SetInWriter(w, c.logger)
 }
 
 func (c *CController) performAction(
 	action action,
 	cConnection *cConnection,
 	request *RequestPayload,
-	response *ResponsePayload,
+	resp *response.Payload,
 ) {
 	var statusResponse *v1.StatusResponse
 	var err error
@@ -157,7 +152,7 @@ func (c *CController) performAction(
 	cpuClient, err := cConnection.connection.GetCPUClient(request.Target)
 	if err != nil {
 		err = errors.Wrap(err, fmt.Sprintf("Can not get cpu connection for target {%s}", request.Target))
-		response.internalServerError(err.Error(), c.logger)
+		resp.InternalServerError(err.Error(), c.logger)
 		return
 	}
 
@@ -167,40 +162,22 @@ func (c *CController) performAction(
 	case stop:
 		statusResponse, err = cpuClient.Stop(context.Background(), newCPURequest(request))
 	default:
-		response.badRequest(fmt.Sprintf("Action {%s} not allowed", action), c.logger)
+		resp.BadRequest(fmt.Sprintf("Action {%s} not allowed", action), c.logger)
 		return
 	}
 
 	switch {
 	case err != nil:
 		err = errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", request.Target))
-		response.internalServerError(err.Error(), c.logger)
+		resp.InternalServerError(err.Error(), c.logger)
 	case statusResponse.Status != v1.StatusResponse_SUCCESS:
-		response.internalServerError(fmt.Sprintf("Failure response from target {%s}", request.Target), c.logger)
+		resp.InternalServerError(fmt.Sprintf("Failure response from target {%s}", request.Target), c.logger)
 	default:
-		response.Message = fmt.Sprintf("Response from target {%s}, {%s}, {%s}", request.Target, statusResponse.Message, statusResponse.Status)
-		_ = level.Info(c.logger).Log("msg", response.Message)
+		resp.Message = fmt.Sprintf("Response from target {%s}, {%s}, {%s}", request.Target, statusResponse.Message, statusResponse.Status)
+		_ = level.Info(c.logger).Log("msg", resp.Message)
 		if err = c.updateCache(cpuClient, request, action); err != nil {
 			_ = level.Error(c.logger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
 		}
-	}
-}
-
-func setResponseInWriter(w http.ResponseWriter, resp *ResponsePayload, logger log.Logger) {
-	reqBodyBytes := new(bytes.Buffer)
-	err := json.NewEncoder(reqBodyBytes).Encode(resp)
-	if err != nil {
-		_ = level.Error(logger).Log("msg", "Error when trying to encode response to byte array", "err", err)
-		w.WriteHeader(500)
-		return
-	}
-
-	w.WriteHeader(resp.Status)
-	_, err = w.Write(reqBodyBytes.Bytes())
-	if err != nil {
-		_ = level.Error(logger).Log("msg", "Error when trying to write response to byte array", "err", err)
-		w.WriteHeader(500)
-		return
 	}
 }
 
@@ -222,24 +199,4 @@ func (c *CController) updateCache(cpuClient v1.CPUClient, request *RequestPayloa
 	default:
 		return errors.New(fmt.Sprintf("Action %s not supported for cache operation", action))
 	}
-}
-
-func newDefaultResponse() *ResponsePayload {
-	return &ResponsePayload{
-		Message: "",
-		Error:   "",
-		Status:  200,
-	}
-}
-
-func (r *ResponsePayload) badRequest(message string, logger log.Logger) {
-	r.Error = message
-	r.Status = 400
-	_ = level.Warn(logger).Log("msg", "Bad request", "warn", message)
-}
-
-func (r *ResponsePayload) internalServerError(message string, logger log.Logger) {
-	r.Error = message
-	r.Status = 500
-	_ = level.Error(logger).Log("msg", "Internal server error", "err", message)
 }

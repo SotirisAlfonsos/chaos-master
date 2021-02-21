@@ -59,19 +59,19 @@ var doc = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/cpu.ResponsePayload"
+                            "$ref": "#/definitions/response.Payload"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/cpu.ResponsePayload"
+                            "$ref": "#/definitions/response.Payload"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/cpu.ResponsePayload"
+                            "$ref": "#/definitions/response.Payload"
                         }
                     }
                 }
@@ -118,19 +118,19 @@ var doc = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/docker.ResponsePayload"
+                            "$ref": "#/definitions/response.Payload"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/docker.ResponsePayload"
+                            "$ref": "#/definitions/response.Payload"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/docker.ResponsePayload"
+                            "$ref": "#/definitions/response.Payload"
                         }
                     }
                 }
@@ -185,7 +185,7 @@ var doc = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/v1.requestPayload"
+                            "$ref": "#/definitions/recover.requestPayload"
                         }
                     }
                 ],
@@ -193,13 +193,13 @@ var doc = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/v1.RecoverResponsePayload"
+                            "$ref": "#/definitions/response.RecoverResponsePayload"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/v1.RecoverResponsePayload"
+                            "$ref": "#/definitions/response.RecoverResponsePayload"
                         }
                     }
                 }
@@ -240,19 +240,19 @@ var doc = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/service.ResponsePayload"
+                            "$ref": "#/definitions/response.Payload"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/service.ResponsePayload"
+                            "$ref": "#/definitions/response.Payload"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/service.ResponsePayload"
+                            "$ref": "#/definitions/response.Payload"
                         }
                     }
                 }
@@ -274,20 +274,6 @@ var doc = `{
                 }
             }
         },
-        "cpu.ResponsePayload": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
         "docker.RequestPayload": {
             "type": "object",
             "properties": {
@@ -302,7 +288,43 @@ var doc = `{
                 }
             }
         },
-        "docker.ResponsePayload": {
+        "recover.Alert": {
+            "type": "object",
+            "properties": {
+                "labels": {
+                    "$ref": "#/definitions/recover.Labels"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "recover.Labels": {
+            "type": "object",
+            "properties": {
+                "recoverAll": {
+                    "type": "boolean"
+                },
+                "recoverJob": {
+                    "type": "string"
+                },
+                "recoverTarget": {
+                    "type": "string"
+                }
+            }
+        },
+        "recover.requestPayload": {
+            "type": "object",
+            "properties": {
+                "alerts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/recover.Alert"
+                    }
+                }
+            }
+        },
+        "response.Payload": {
             "type": "object",
             "properties": {
                 "error": {
@@ -310,6 +332,34 @@ var doc = `{
                 },
                 "message": {
                     "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "response.RecoverMessage": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "response.RecoverResponsePayload": {
+            "type": "object",
+            "properties": {
+                "recoverMessages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/response.RecoverMessage"
+                    }
                 },
                 "status": {
                     "type": "integer"
@@ -327,84 +377,6 @@ var doc = `{
                 },
                 "target": {
                     "type": "string"
-                }
-            }
-        },
-        "service.ResponsePayload": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "v1.Alert": {
-            "type": "object",
-            "properties": {
-                "labels": {
-                    "$ref": "#/definitions/v1.Labels"
-                },
-                "status": {
-                    "type": "string"
-                }
-            }
-        },
-        "v1.Labels": {
-            "type": "object",
-            "properties": {
-                "recoverAll": {
-                    "type": "boolean"
-                },
-                "recoverJob": {
-                    "type": "string"
-                },
-                "recoverTarget": {
-                    "type": "string"
-                }
-            }
-        },
-        "v1.RecoverMessage": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                }
-            }
-        },
-        "v1.RecoverResponsePayload": {
-            "type": "object",
-            "properties": {
-                "recoverMessages": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.RecoverMessage"
-                    }
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "v1.requestPayload": {
-            "type": "object",
-            "properties": {
-                "alerts": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.Alert"
-                    }
                 }
             }
         }

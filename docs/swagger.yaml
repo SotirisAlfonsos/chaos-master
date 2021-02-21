@@ -9,15 +9,6 @@ definitions:
       target:
         type: string
     type: object
-  cpu.ResponsePayload:
-    properties:
-      error:
-        type: string
-      message:
-        type: string
-      status:
-        type: integer
-    type: object
   docker.RequestPayload:
     properties:
       containerName:
@@ -27,12 +18,53 @@ definitions:
       target:
         type: string
     type: object
-  docker.ResponsePayload:
+  recover.Alert:
+    properties:
+      labels:
+        $ref: '#/definitions/recover.Labels'
+      status:
+        type: string
+    type: object
+  recover.Labels:
+    properties:
+      recoverAll:
+        type: boolean
+      recoverJob:
+        type: string
+      recoverTarget:
+        type: string
+    type: object
+  recover.requestPayload:
+    properties:
+      alerts:
+        items:
+          $ref: '#/definitions/recover.Alert'
+        type: array
+    type: object
+  response.Payload:
     properties:
       error:
         type: string
       message:
         type: string
+      status:
+        type: integer
+    type: object
+  response.RecoverMessage:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+      status:
+        type: string
+    type: object
+  response.RecoverResponsePayload:
+    properties:
+      recoverMessages:
+        items:
+          $ref: '#/definitions/response.RecoverMessage'
+        type: array
       status:
         type: integer
     type: object
@@ -44,56 +76,6 @@ definitions:
         type: string
       target:
         type: string
-    type: object
-  service.ResponsePayload:
-    properties:
-      error:
-        type: string
-      message:
-        type: string
-      status:
-        type: integer
-    type: object
-  v1.Alert:
-    properties:
-      labels:
-        $ref: '#/definitions/v1.Labels'
-      status:
-        type: string
-    type: object
-  v1.Labels:
-    properties:
-      recoverAll:
-        type: boolean
-      recoverJob:
-        type: string
-      recoverTarget:
-        type: string
-    type: object
-  v1.RecoverMessage:
-    properties:
-      error:
-        type: string
-      message:
-        type: string
-      status:
-        type: string
-    type: object
-  v1.RecoverResponsePayload:
-    properties:
-      recoverMessages:
-        items:
-          $ref: '#/definitions/v1.RecoverMessage'
-        type: array
-      status:
-        type: integer
-    type: object
-  v1.requestPayload:
-    properties:
-      alerts:
-        items:
-          $ref: '#/definitions/v1.Alert'
-        type: array
     type: object
 host: localhost:8090
 info:
@@ -126,15 +108,15 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/cpu.ResponsePayload'
+            $ref: '#/definitions/response.Payload'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/cpu.ResponsePayload'
+            $ref: '#/definitions/response.Payload'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/cpu.ResponsePayload'
+            $ref: '#/definitions/response.Payload'
       summary: Inject CPU failures
       tags:
       - Failure injections
@@ -166,15 +148,15 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/docker.ResponsePayload'
+            $ref: '#/definitions/response.Payload'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/docker.ResponsePayload'
+            $ref: '#/definitions/response.Payload'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/docker.ResponsePayload'
+            $ref: '#/definitions/response.Payload'
       summary: Inject docker failures
       tags:
       - Failure injections
@@ -208,18 +190,18 @@ paths:
         name: requestPayload
         required: true
         schema:
-          $ref: '#/definitions/v1.requestPayload'
+          $ref: '#/definitions/recover.requestPayload'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/v1.RecoverResponsePayload'
+            $ref: '#/definitions/response.RecoverResponsePayload'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/v1.RecoverResponsePayload'
+            $ref: '#/definitions/response.RecoverResponsePayload'
       summary: recover from failures
       tags:
       - Recover
@@ -246,15 +228,15 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/service.ResponsePayload'
+            $ref: '#/definitions/response.Payload'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/service.ResponsePayload'
+            $ref: '#/definitions/response.Payload'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/service.ResponsePayload'
+            $ref: '#/definitions/response.Payload'
       summary: Inject service failures
       tags:
       - Failure injections

@@ -13,6 +13,7 @@ import (
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/config"
+	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
 	"github.com/go-kit/kit/log"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
@@ -35,7 +36,7 @@ type TestData struct {
 
 type expectedResult struct {
 	cacheSize int
-	payload   *ResponsePayload
+	payload   *response.Payload
 }
 
 type mockCPUClient struct {
@@ -302,14 +303,14 @@ func assertActionPerformed(t *testing.T, dataItem TestData, action string) {
 		t.Fatal(err)
 	}
 
-	response, err := cpuPostCall(server, dataItem.requestPayload, action)
+	resp, err := cpuPostCall(server, dataItem.requestPayload, action)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, dataItem.expected.payload.Status, response.Status)
-	assert.Equal(t, dataItem.expected.payload.Message, response.Message)
-	assert.Equal(t, dataItem.expected.payload.Error, response.Error)
+	assert.Equal(t, dataItem.expected.payload.Status, resp.Status)
+	assert.Equal(t, dataItem.expected.payload.Message, resp.Message)
+	assert.Equal(t, dataItem.expected.payload.Error, resp.Error)
 	assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
 
 	server.Close()
@@ -382,44 +383,44 @@ func cpuHTTPTestServerWithCacheItems(
 	return httptest.NewServer(router), nil
 }
 
-func cpuPostCall(server *httptest.Server, details *RequestPayload, action string) (*ResponsePayload, error) {
+func cpuPostCall(server *httptest.Server, details *RequestPayload, action string) (*response.Payload, error) {
 	requestBody, _ := json.Marshal(details)
 	url := server.URL + "/cpu?action=" + action
 
 	return post(requestBody, url)
 }
 
-func post(requestBody []byte, url string) (*ResponsePayload, error) {
+func post(requestBody []byte, url string) (*response.Payload, error) {
 	resp, err := http.Post(url, "", bytes.NewReader(requestBody)) //nolint:gosec
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	response := &ResponsePayload{}
-	err = json.NewDecoder(resp.Body).Decode(&response)
+	respPayload := &response.Payload{}
+	err = json.NewDecoder(resp.Body).Decode(&respPayload)
 	if err != nil {
-		return &ResponsePayload{Status: resp.StatusCode}, err
+		return &response.Payload{Status: resp.StatusCode}, err
 	}
-	return response, nil
+	return respPayload, nil
 }
 
-func okResponse(message string) *ResponsePayload {
-	return &ResponsePayload{
+func okResponse(message string) *response.Payload {
+	return &response.Payload{
 		Message: message,
 		Status:  200,
 	}
 }
 
-func badRequestResponse(error string) *ResponsePayload {
-	return &ResponsePayload{
+func badRequestResponse(error string) *response.Payload {
+	return &response.Payload{
 		Error:  error,
 		Status: 400,
 	}
 }
 
-func internalServerErrorResponse(error string) *ResponsePayload {
-	return &ResponsePayload{
+func internalServerErrorResponse(error string) *response.Payload {
+	return &response.Payload{
 		Error:  error,
 		Status: 500,
 	}
