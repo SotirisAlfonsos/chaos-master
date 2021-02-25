@@ -308,25 +308,25 @@ func TestDockerWithInvalidAction(t *testing.T) {
 }
 
 func assertActionPerformed(t *testing.T, dataItem TestData, action string) {
-	t.Log(dataItem.message)
+	t.Run(dataItem.message, func(t *testing.T) {
+		cacheManager := cache.NewCacheManager(logger)
+		server, err := dockerHTTPTestServerWithCacheItems(dataItem.jobMap, dataItem.connectionPool, cacheManager, dataItem.cacheItems)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	cacheManager := cache.NewCacheManager(logger)
-	server, err := dockerHTTPTestServerWithCacheItems(dataItem.jobMap, dataItem.connectionPool, cacheManager, dataItem.cacheItems)
-	if err != nil {
-		t.Fatal(err)
-	}
+		respCall, err := dockerPostCall(server, dataItem.requestPayload, action)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	response, err := dockerPostCall(server, dataItem.requestPayload, action)
-	if err != nil {
-		t.Fatal(err)
-	}
+		assert.Equal(t, dataItem.expected.payload.Status, respCall.Status)
+		assert.Equal(t, dataItem.expected.payload.Message, respCall.Message)
+		assert.Equal(t, dataItem.expected.payload.Error, respCall.Error)
+		assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
 
-	assert.Equal(t, dataItem.expected.payload.Status, response.Status)
-	assert.Equal(t, dataItem.expected.payload.Message, response.Message)
-	assert.Equal(t, dataItem.expected.payload.Error, response.Error)
-	assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
-
-	server.Close()
+		server.Close()
+	})
 }
 
 type TestDataForRandomDocker struct {
@@ -575,25 +575,25 @@ func functionWithSuccessResponse() func() (*v1.StatusResponse, error) {
 }
 
 func assertRandomActionPerformed(t *testing.T, dataItem TestDataForRandomDocker, do string, action string) {
-	t.Log(dataItem.message)
+	t.Run(dataItem.message, func(t *testing.T) {
+		cacheManager := cache.NewCacheManager(logger)
+		server, err := dockerHTTPTestServerWithCacheItems(dataItem.jobMap, dataItem.connectionPool, cacheManager, dataItem.cacheItems)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	cacheManager := cache.NewCacheManager(logger)
-	server, err := dockerHTTPTestServerWithCacheItems(dataItem.jobMap, dataItem.connectionPool, cacheManager, dataItem.cacheItems)
-	if err != nil {
-		t.Fatal(err)
-	}
+		resp, err := dockerPostCallNoTarget(server, dataItem.requestPayload, do, action)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	resp, err := dockerPostCallNoTarget(server, dataItem.requestPayload, do, action)
-	if err != nil {
-		t.Fatal(err)
-	}
+		assert.Equal(t, dataItem.expected.payload.Status, resp.Status)
+		assert.Regexp(t, regexp.MustCompile(dataItem.expected.payload.Message), resp.Message)
+		assert.Regexp(t, regexp.MustCompile(dataItem.expected.payload.Error), resp.Error)
+		assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
 
-	assert.Equal(t, dataItem.expected.payload.Status, resp.Status)
-	assert.Regexp(t, regexp.MustCompile(dataItem.expected.payload.Message), resp.Message)
-	assert.Regexp(t, regexp.MustCompile(dataItem.expected.payload.Error), resp.Error)
-	assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
-
-	server.Close()
+		server.Close()
+	})
 }
 
 func withSuccessDockerConnection() *dConnection {

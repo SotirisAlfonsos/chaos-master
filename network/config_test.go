@@ -37,19 +37,19 @@ func TestSuccessfullySetTargetConnectionPoolForSingleJob(t *testing.T) {
 	}
 
 	for _, dataItem := range dataItems {
-		t.Logf(dataItem.message)
+		t.Run(dataItem.message, func(t *testing.T) {
+			conf := &config.Config{
+				JobsFromConfig:    dataItem.jobsConfig,
+				HealthCheckReport: false,
+			}
 
-		conf := &config.Config{
-			JobsFromConfig:    dataItem.jobsConfig,
-			HealthCheckReport: false,
-		}
+			connectionPool := GetConnectionPool(conf, logger)
 
-		connectionPool := GetConnectionPool(conf, logger)
-
-		assert.Equal(t, len(dataItem.expected), len(connectionPool.Pool))
-		for _, target := range dataItem.expected {
-			assert.NotNil(t, connectionPool.Pool[target])
-		}
+			assert.Equal(t, len(dataItem.expected), len(connectionPool.Pool))
+			for _, target := range dataItem.expected {
+				assert.NotNil(t, connectionPool.Pool[target])
+			}
+		})
 	}
 }
 
@@ -79,19 +79,19 @@ func TestSuccessfullySetTargetConnectionPoolForMultipleJob(t *testing.T) {
 	}
 
 	for _, dataItem := range dataItems {
-		t.Logf(dataItem.message)
+		t.Run(dataItem.message, func(t *testing.T) {
+			conf := &config.Config{
+				JobsFromConfig:    dataItem.jobsConfig,
+				HealthCheckReport: false,
+			}
 
-		conf := &config.Config{
-			JobsFromConfig:    dataItem.jobsConfig,
-			HealthCheckReport: false,
-		}
+			connectionPool := GetConnectionPool(conf, logger)
 
-		connectionPool := GetConnectionPool(conf, logger)
-
-		assert.Equal(t, len(dataItem.expected), len(connectionPool.Pool))
-		for _, target := range dataItem.expected {
-			assert.NotNil(t, connectionPool.Pool[target])
-		}
+			assert.Equal(t, len(dataItem.expected), len(connectionPool.Pool))
+			for _, target := range dataItem.expected {
+				assert.NotNil(t, connectionPool.Pool[target])
+			}
+		})
 	}
 }
 
@@ -121,28 +121,28 @@ func TestSuccessfullySetTargetConnectionPoolWithTls(t *testing.T) {
 	}
 
 	for _, dataItem := range dataItems {
-		t.Logf(dataItem.message)
-
-		conf := &config.Config{
-			JobsFromConfig: dataItem.jobsConfig,
-			Bots:           dataItem.bots,
-		}
-
-		connectionPool := GetConnectionPool(conf, logger)
-
-		assert.Equal(t, len(dataItem.expected), len(connectionPool.Pool))
-		for _, target := range dataItem.expected {
-			if _, err := connectionPool.Pool[target].GetHealthClient(target); err != nil {
-				t.Errorf("Connection redial should not have error when getting the health client")
+		t.Run(dataItem.message, func(t *testing.T) {
+			conf := &config.Config{
+				JobsFromConfig: dataItem.jobsConfig,
+				Bots:           dataItem.bots,
 			}
-			if _, err := connectionPool.Pool[target].GetDockerClient(target); err != nil {
-				t.Errorf("Connection redial should not have error when getting the docker client")
+
+			connectionPool := GetConnectionPool(conf, logger)
+
+			assert.Equal(t, len(dataItem.expected), len(connectionPool.Pool))
+			for _, target := range dataItem.expected {
+				if _, err := connectionPool.Pool[target].GetHealthClient(target); err != nil {
+					t.Errorf("Connection redial should not have error when getting the health client")
+				}
+				if _, err := connectionPool.Pool[target].GetDockerClient(target); err != nil {
+					t.Errorf("Connection redial should not have error when getting the docker client")
+				}
+				if _, err := connectionPool.Pool[target].GetServiceClient(target); err != nil {
+					t.Errorf("Connection redial should not have error when getting the service client")
+				}
+				assert.NotNil(t, connectionPool.Pool[target])
 			}
-			if _, err := connectionPool.Pool[target].GetServiceClient(target); err != nil {
-				t.Errorf("Connection redial should not have error when getting the service client")
-			}
-			assert.NotNil(t, connectionPool.Pool[target])
-		}
+		})
 	}
 }
 
@@ -165,26 +165,26 @@ func TestRedialFailureWithTls(t *testing.T) {
 	}
 
 	for _, dataItem := range dataItems {
-		t.Logf(dataItem.message)
-
-		conf := &config.Config{
-			JobsFromConfig: dataItem.jobsConfig,
-			Bots:           dataItem.bots,
-		}
-
-		connectionPool := GetConnectionPool(conf, logger)
-
-		assert.Equal(t, len(dataItem.expected), len(connectionPool.Pool))
-		for _, target := range dataItem.expected {
-			if _, err := connectionPool.Pool[target].GetHealthClient(target); err == nil {
-				t.Errorf("Connection redial should have error when getting the health client")
+		t.Run(dataItem.message, func(t *testing.T) {
+			conf := &config.Config{
+				JobsFromConfig: dataItem.jobsConfig,
+				Bots:           dataItem.bots,
 			}
-			if _, err := connectionPool.Pool[target].GetDockerClient(target); err == nil {
-				t.Errorf("Connection redial should have error when getting the docker client")
+
+			connectionPool := GetConnectionPool(conf, logger)
+
+			assert.Equal(t, len(dataItem.expected), len(connectionPool.Pool))
+			for _, target := range dataItem.expected {
+				if _, err := connectionPool.Pool[target].GetHealthClient(target); err == nil {
+					t.Errorf("Connection redial should have error when getting the health client")
+				}
+				if _, err := connectionPool.Pool[target].GetDockerClient(target); err == nil {
+					t.Errorf("Connection redial should have error when getting the docker client")
+				}
+				if _, err := connectionPool.Pool[target].GetServiceClient(target); err == nil {
+					t.Errorf("Connection redial should have error when getting the service client")
+				}
 			}
-			if _, err := connectionPool.Pool[target].GetServiceClient(target); err == nil {
-				t.Errorf("Connection redial should have error when getting the service client")
-			}
-		}
+		})
 	}
 }

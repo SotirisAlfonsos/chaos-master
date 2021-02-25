@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
@@ -17,7 +19,6 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )
 
@@ -295,25 +296,25 @@ func TestCPUWithInvalidAction(t *testing.T) {
 }
 
 func assertActionPerformed(t *testing.T, dataItem TestData, action string) {
-	t.Log(dataItem.message)
+	t.Run(dataItem.message, func(t *testing.T) {
+		cacheManager := cache.NewCacheManager(logger)
+		server, err := cpuHTTPTestServerWithCacheItems(dataItem.jobMap, dataItem.connectionPool, cacheManager, dataItem.cacheItems)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	cacheManager := cache.NewCacheManager(logger)
-	server, err := cpuHTTPTestServerWithCacheItems(dataItem.jobMap, dataItem.connectionPool, cacheManager, dataItem.cacheItems)
-	if err != nil {
-		t.Fatal(err)
-	}
+		resp, err := cpuPostCall(server, dataItem.requestPayload, action)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	resp, err := cpuPostCall(server, dataItem.requestPayload, action)
-	if err != nil {
-		t.Fatal(err)
-	}
+		assert.Equal(t, dataItem.expected.payload.Status, resp.Status)
+		assert.Equal(t, dataItem.expected.payload.Message, resp.Message)
+		assert.Equal(t, dataItem.expected.payload.Error, resp.Error)
+		assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
 
-	assert.Equal(t, dataItem.expected.payload.Status, resp.Status)
-	assert.Equal(t, dataItem.expected.payload.Message, resp.Message)
-	assert.Equal(t, dataItem.expected.payload.Error, resp.Error)
-	assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
-
-	server.Close()
+		server.Close()
+	})
 }
 
 func newCPUJob(targets ...string) *config.Job {

@@ -53,17 +53,17 @@ func TestShouldRegisterNewItem(t *testing.T) {
 		},
 	}
 	for _, testData := range testDataSet {
-		t.Log(testData.message)
+		t.Run(testData.message, func(t *testing.T) {
+			manager := NewCacheManager(logger)
 
-		manager := NewCacheManager(logger)
-
-		for _, item := range testData.inputItems {
-			if err := manager.Register(item.key, item.val); err != nil {
-				t.Fatal("Should be able to add function to cache")
+			for _, item := range testData.inputItems {
+				if err := manager.Register(item.key, item.val); err != nil {
+					t.Fatal("Should be able to add function to cache")
+				}
 			}
-		}
 
-		assert.Equal(t, testData.expectedItemCount, manager.ItemCount())
+			assert.Equal(t, testData.expectedItemCount, manager.ItemCount())
+		})
 	}
 }
 
@@ -95,19 +95,19 @@ func TestDeleteItem(t *testing.T) {
 		},
 	}
 	for _, testData := range testDataSet {
-		t.Log(testData.message)
+		t.Run(testData.message, func(t *testing.T) {
+			manager := NewCacheManager(logger)
 
-		manager := NewCacheManager(logger)
-
-		for _, item := range testData.inputItems {
-			if err := manager.Register(item.key, item.val); err != nil {
-				t.Fatal("Should be able to add function to cache")
+			for _, item := range testData.inputItems {
+				if err := manager.Register(item.key, item.val); err != nil {
+					t.Fatal("Should be able to add function to cache")
+				}
 			}
-		}
 
-		manager.Delete(testData.actionItem)
+			manager.Delete(testData.actionItem)
 
-		assert.Equal(t, testData.expectedItemCount, manager.ItemCount())
+			assert.Equal(t, testData.expectedItemCount, manager.ItemCount())
+		})
 	}
 }
 
@@ -128,24 +128,24 @@ func TestGetAllExistingItems(t *testing.T) {
 		},
 	}
 	for _, testData := range testDataSet {
-		t.Log(testData.message)
+		t.Run(testData.message, func(t *testing.T) {
+			manager := NewCacheManager(logger)
 
-		manager := NewCacheManager(logger)
-
-		for _, item := range testData.inputItems {
-			if err := manager.Register(item.key, item.val); err != nil {
-				t.Fatal("Should be able to add function to cache")
+			for _, item := range testData.inputItems {
+				if err := manager.Register(item.key, item.val); err != nil {
+					t.Fatal("Should be able to add function to cache")
+				}
 			}
-		}
 
-		cacheRetrievedItems := manager.GetAll()
+			cacheRetrievedItems := manager.GetAll()
 
-		assert.Equal(t, testData.expectedItemCount, len(cacheRetrievedItems))
-		for _, inputItem := range testData.inputItems {
-			if _, ok := cacheRetrievedItems[*inputItem.key]; !ok {
-				t.Fatal("Item should be retrieved from cache")
+			assert.Equal(t, testData.expectedItemCount, len(cacheRetrievedItems))
+			for _, inputItem := range testData.inputItems {
+				if _, ok := cacheRetrievedItems[*inputItem.key]; !ok {
+					t.Fatal("Item should be retrieved from cache")
+				}
 			}
-		}
+		})
 	}
 }
 
@@ -162,20 +162,20 @@ func TestGetExistingItem(t *testing.T) {
 		},
 	}
 	for _, testData := range testDataSet {
-		t.Log(testData.message)
+		t.Run(testData.message, func(t *testing.T) {
+			manager := NewCacheManager(logger)
 
-		manager := NewCacheManager(logger)
-
-		for _, item := range testData.inputItems {
-			if err := manager.Register(item.key, item.val); err != nil {
-				t.Fatal("Should be able to add function to cache")
+			for _, item := range testData.inputItems {
+				if err := manager.Register(item.key, item.val); err != nil {
+					t.Fatal("Should be able to add function to cache")
+				}
 			}
-		}
 
-		function := manager.Get(testData.actionItem)
+			function := manager.Get(testData.actionItem)
 
-		assert.Equal(t, testData.expectedItemCount, manager.ItemCount())
-		assert.NotNil(t, function)
+			assert.Equal(t, testData.expectedItemCount, manager.ItemCount())
+			assert.NotNil(t, function)
+		})
 	}
 }
 
@@ -207,20 +207,20 @@ func TestGetNonExistingItem(t *testing.T) {
 		},
 	}
 	for _, testData := range testDataSet {
-		t.Log(testData.message)
+		t.Run(testData.message, func(t *testing.T) {
+			manager := NewCacheManager(logger)
 
-		manager := NewCacheManager(logger)
-
-		for _, item := range testData.inputItems {
-			if err := manager.Register(item.key, item.val); err != nil {
-				t.Fatal("Should be able to add function to cache")
+			for _, item := range testData.inputItems {
+				if err := manager.Register(item.key, item.val); err != nil {
+					t.Fatal("Should be able to add function to cache")
+				}
 			}
-		}
 
-		function := manager.Get(testData.actionItem)
+			function := manager.Get(testData.actionItem)
 
-		assert.Equal(t, testData.expectedItemCount, manager.ItemCount())
-		assert.Nil(t, function)
+			assert.Equal(t, testData.expectedItemCount, manager.ItemCount())
+			assert.Nil(t, function)
+		})
 	}
 }
 

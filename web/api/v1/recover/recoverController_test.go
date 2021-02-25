@@ -210,24 +210,24 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 }
 
 func assertSuccessfulRecovery(t *testing.T, dataItem TestData) {
-	t.Logf(dataItem.message)
+	t.Run(dataItem.message, func(t *testing.T) {
+		cacheManager := cache.NewCacheManager(logger)
+		server, err := recoverHTTPTestServerWithCacheItems(cacheManager, dataItem.cacheItems)
+		if err != nil {
+			t.Fatal(err)
+		}
+		requestPayload := newRequestPayload(dataItem.alerts)
 
-	cacheManager := cache.NewCacheManager(logger)
-	server, err := recoverHTTPTestServerWithCacheItems(cacheManager, dataItem.cacheItems)
-	if err != nil {
-		t.Fatal(err)
-	}
-	requestPayload := newRequestPayload(dataItem.alerts)
+		responsePayload, err := restorePostCall(server, requestPayload)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	responsePayload, err := restorePostCall(server, requestPayload)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, dataItem.expected.payload.Status, responsePayload.Status)
-	assert.Equal(t, len(dataItem.expected.payload.RecoverMessage), len(responsePayload.RecoverMessage))
-	assert.Equal(t, dataItem.expected.payload.GetSortedStatuses(), responsePayload.GetSortedStatuses())
-	assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
+		assert.Equal(t, dataItem.expected.payload.Status, responsePayload.Status)
+		assert.Equal(t, len(dataItem.expected.payload.RecoverMessage), len(responsePayload.RecoverMessage))
+		assert.Equal(t, dataItem.expected.payload.GetSortedStatuses(), responsePayload.GetSortedStatuses())
+		assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
+	})
 }
 
 func okResponse(statuses ...string) *response.RecoverResponsePayload {
