@@ -43,6 +43,12 @@ stopCPUInjection () {
   -d '{"job": '\""$1"\"', "target": '\""$2"\"'}' | grep -E -i "$3")
 }
 
+stopServer () {
+  echo $(curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/server?action=stop" \
+  -H "Content-Type: application/json" \
+  -d '{"job": '\""$1"\"', "target": '\""$2"\"'}' | grep -E -i "$3")
+}
+
 printf %"s\n" "------------ Init start service and container ------------"
 out=$(startService "zookeeper service" "simple" "127.0.0.1:8081" '"status":200')
 verifyOK $out
@@ -97,6 +103,10 @@ out=$(curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/recover/alertmanager"
 -d '{"alerts": [{"status": "firing", "labels": {"recoverJob": "zookeeper docker"}}]}' | grep -E -i '"status":200')
 verifyOK $out
 
+
+printf "\n"%"s\n" "------------ Stop server ------------"
+out=$(stopServer "server_injection" "127.0.0.1:8081" '"status":200')
+verifyOK $out
 
 printf "\n"%"s\n" "------------ Clean ------------"
 out=$(stopService "zookeeper service" "simple" "127.0.0.1:8081" '"status":200')

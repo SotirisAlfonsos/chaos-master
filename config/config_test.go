@@ -23,11 +23,14 @@ func TestShouldUnmarshalSimpleConfig(t *testing.T) {
 	}
 
 	assert.Equal(t, "8090", config.APIOptions.Port, "The correct port should be found from the fine")
-	assert.Equal(t, true, config.HealthCheckReport, "The health check report option should be found from the file")
-	assert.Equal(t, 4, len(config.JobsFromConfig))
+	assert.Equal(t, true, config.HealthCheck.Report, "The health check report option should be found from the file")
+	assert.Equal(t, true, config.HealthCheck.Active, "The health check active option should be found from the file")
+	assert.Equal(t, 5, len(config.JobsFromConfig))
 	assert.Equal(t, "zookeeper docker", config.JobsFromConfig[0].JobName, "the correct first job name from the file")
 	assert.Equal(t, "zookeeper service", config.JobsFromConfig[1].JobName, "the correct second job name from the file")
 	assert.Equal(t, "zookeeper service", config.JobsFromConfig[2].JobName, "the correct third job name from the file")
+	assert.Equal(t, "cpu injection", config.JobsFromConfig[3].JobName, "the correct fourth job name from the file")
+	assert.Equal(t, "server injection", config.JobsFromConfig[4].JobName, "the correct fifth job name from the file")
 	assert.Equal(t, "1234", config.Bots.PeerToken, "the peer token for the communication with the bots")
 }
 
@@ -40,7 +43,8 @@ func TestShouldUnmarshalConfigWIthMissingDefaultValues(t *testing.T) {
 	}
 
 	assert.Equal(t, "8080", config.APIOptions.Port, "Should have the default port")
-	assert.Equal(t, false, config.HealthCheckReport, "Should have the default false value")
+	assert.Equal(t, false, config.HealthCheck.Report, "Should have the default false value")
+	assert.Equal(t, false, config.HealthCheck.Active, "Should have the default false value")
 	assert.Equal(t, 1, len(config.JobsFromConfig))
 }
 
@@ -80,6 +84,24 @@ func Test_Should_Error_When_Docker_failure_does_not_have_component_name(t *testi
 	}
 }
 
+func Test_Should_Error_When_CPU_failure_has_component_name(t *testing.T) {
+	config, err := GetConfig("test/cpu_should_not_have_component_name.yml")
+	if err != nil {
+		assert.Equal(t, "job {CPU} should not have component_name", err.Error())
+	} else {
+		t.Errorf("There should be an error because the file is missing key values %v", config)
+	}
+}
+
+func Test_Should_Error_When_Server_failure_has_component_name(t *testing.T) {
+	config, err := GetConfig("test/server_should_not_have_component_name.yml")
+	if err != nil {
+		assert.Equal(t, "job {Server} should not have component_name", err.Error())
+	} else {
+		t.Errorf("There should be an error because the file is missing key values %v", config)
+	}
+}
+
 func TestShouldGetJobMap(t *testing.T) {
 	config, err := GetConfig("test/simple_config.yml")
 	if err != nil {
@@ -90,7 +112,7 @@ func TestShouldGetJobMap(t *testing.T) {
 
 	jobMap := config.GetJobMap(logger)
 
-	assert.Equal(t, 3, len(config.JobsFromConfig)-1)
+	assert.Equal(t, 4, len(config.JobsFromConfig)-1)
 	assert.Equal(t, "my_zoo", jobMap["zookeeper docker"].ComponentName)
 	assert.Equal(t, Docker, jobMap["zookeeper docker"].FailureType)
 	assert.Equal(t, 1, len(jobMap["zookeeper docker"].Target))
@@ -99,6 +121,8 @@ func TestShouldGetJobMap(t *testing.T) {
 	assert.Equal(t, 2, len(jobMap["zookeeper service"].Target))
 	assert.Equal(t, "", jobMap["cpu injection"].ComponentName)
 	assert.Equal(t, CPU, jobMap["cpu injection"].FailureType)
+	assert.Equal(t, "", jobMap["server injection"].ComponentName)
+	assert.Equal(t, Server, jobMap["server injection"].FailureType)
 	assert.Equal(t, 1, len(jobMap["cpu injection"].Target))
 }
 

@@ -78,11 +78,8 @@ type RequestPayload struct {
 
 func newServiceRequest(details *RequestPayload) *v1.ServiceRequest {
 	return &v1.ServiceRequest{
-		JobName:              details.Job,
-		Name:                 details.ServiceName,
-		XXX_NoUnkeyedLiteral: struct{}{},
-		XXX_unrecognized:     nil,
-		XXX_sizecache:        0,
+		JobName: details.Job,
+		Name:    details.ServiceName,
 	}
 }
 

@@ -2,24 +2,22 @@ package cpu
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/config"
+	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
 	"github.com/go-kit/kit/log"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -38,64 +36,6 @@ type TestData struct {
 type expectedResult struct {
 	cacheSize int
 	payload   *response.Payload
-}
-
-type mockCPUClient struct {
-	Status *v1.StatusResponse
-	Error  error
-}
-
-func GetMockCPUClient(status *v1.StatusResponse, err error) v1.CPUClient {
-	return &mockCPUClient{Status: status, Error: err}
-}
-
-func (mcc *mockCPUClient) Start(ctx context.Context, in *v1.CPURequest, opts ...grpc.CallOption) (*v1.StatusResponse, error) {
-	return mcc.Status, mcc.Error
-}
-
-func (mcc *mockCPUClient) Stop(ctx context.Context, in *v1.CPURequest, opts ...grpc.CallOption) (*v1.StatusResponse, error) {
-	return mcc.Status, mcc.Error
-}
-
-type connection struct {
-	status *v1.StatusResponse
-	err    error
-}
-
-func (connection *connection) GetServiceClient(target string) (v1.ServiceClient, error) {
-	return nil, nil
-}
-
-func (connection *connection) GetDockerClient(target string) (v1.DockerClient, error) {
-	return nil, nil
-}
-
-func (connection *connection) GetCPUClient(target string) (v1.CPUClient, error) {
-	return GetMockCPUClient(connection.status, connection.err), nil
-}
-
-func (connection *connection) GetHealthClient(target string) (v1.HealthClient, error) {
-	return nil, nil
-}
-
-type failedConnection struct {
-	err error
-}
-
-func (failedConnection *failedConnection) GetServiceClient(target string) (v1.ServiceClient, error) {
-	return nil, failedConnection.err
-}
-
-func (failedConnection *failedConnection) GetDockerClient(target string) (v1.DockerClient, error) {
-	return nil, nil
-}
-
-func (failedConnection *failedConnection) GetCPUClient(target string) (v1.CPUClient, error) {
-	return nil, failedConnection.err
-}
-
-func (failedConnection *failedConnection) GetHealthClient(target string) (v1.HealthClient, error) {
-	return nil, nil
 }
 
 func TestStartCPUSuccess(t *testing.T) {
@@ -325,7 +265,7 @@ func newCPUJob(targets ...string) *config.Job {
 }
 
 func withSuccessCPUConnection() *cConnection {
-	connection := &connection{status: new(v1.StatusResponse), err: nil}
+	connection := &network.MockConnection{Status: new(v1.StatusResponse), Err: nil}
 	return &cConnection{
 		connection: connection,
 	}
@@ -334,7 +274,7 @@ func withSuccessCPUConnection() *cConnection {
 func withFailureCPUConnection() *cConnection {
 	statusResponse := new(v1.StatusResponse)
 	statusResponse.Status = v1.StatusResponse_FAIL
-	connection := &connection{status: statusResponse, err: nil}
+	connection := &network.MockConnection{Status: statusResponse, Err: nil}
 	return &cConnection{
 		connection: connection,
 	}
@@ -343,14 +283,14 @@ func withFailureCPUConnection() *cConnection {
 func withErrorCPUConnection(errorMessage string) *cConnection {
 	statusResponse := new(v1.StatusResponse)
 	statusResponse.Status = v1.StatusResponse_FAIL
-	connection := &connection{status: statusResponse, err: errors.New(errorMessage)}
+	connection := &network.MockConnection{Status: statusResponse, Err: errors.New(errorMessage)}
 	return &cConnection{
 		connection: connection,
 	}
 }
 
 func withFailureToSetCPUConnection(errorMessage string) *cConnection {
-	connection := &failedConnection{err: errors.New(errorMessage)}
+	connection := &network.MockFailedConnection{Err: errors.New(errorMessage)}
 	return &cConnection{
 		connection: connection,
 	}

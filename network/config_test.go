@@ -39,8 +39,11 @@ func TestSuccessfullySetTargetConnectionPoolForSingleJob(t *testing.T) {
 	for _, dataItem := range dataItems {
 		t.Run(dataItem.message, func(t *testing.T) {
 			conf := &config.Config{
-				JobsFromConfig:    dataItem.jobsConfig,
-				HealthCheckReport: false,
+				JobsFromConfig: dataItem.jobsConfig,
+				HealthCheck: &config.HealthCheck{
+					Active: false,
+					Report: false,
+				},
 			}
 
 			connectionPool := GetConnectionPool(conf, logger)
@@ -81,8 +84,11 @@ func TestSuccessfullySetTargetConnectionPoolForMultipleJob(t *testing.T) {
 	for _, dataItem := range dataItems {
 		t.Run(dataItem.message, func(t *testing.T) {
 			conf := &config.Config{
-				JobsFromConfig:    dataItem.jobsConfig,
-				HealthCheckReport: false,
+				JobsFromConfig: dataItem.jobsConfig,
+				HealthCheck: &config.HealthCheck{
+					Active: false,
+					Report: false,
+				},
 			}
 
 			connectionPool := GetConnectionPool(conf, logger)

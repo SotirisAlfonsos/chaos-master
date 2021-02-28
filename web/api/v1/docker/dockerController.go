@@ -8,12 +8,11 @@ import (
 	"math/big"
 	"net/http"
 
-	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
-
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/SotirisAlfonsos/chaos-master/network"
+	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
@@ -85,21 +84,15 @@ type RequestPayloadNoTarget struct {
 
 func newDockerRequest(details *RequestPayload) *v1.DockerRequest {
 	return &v1.DockerRequest{
-		JobName:              details.Job,
-		Name:                 details.Container,
-		XXX_NoUnkeyedLiteral: struct{}{},
-		XXX_unrecognized:     nil,
-		XXX_sizecache:        0,
+		JobName: details.Job,
+		Name:    details.Container,
 	}
 }
 
 func newDockerRequestNoTarget(details *RequestPayloadNoTarget) *v1.DockerRequest {
 	return &v1.DockerRequest{
-		JobName:              details.Job,
-		Name:                 details.Container,
-		XXX_NoUnkeyedLiteral: struct{}{},
-		XXX_unrecognized:     nil,
-		XXX_sizecache:        0,
+		JobName: details.Job,
+		Name:    details.Container,
 	}
 }
 

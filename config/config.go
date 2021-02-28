@@ -12,15 +12,20 @@ import (
 )
 
 type Config struct {
-	APIOptions        *RestAPIOptions   `yaml:"api_options"`
-	JobsFromConfig    []*JobsFromConfig `yaml:"jobs,flow"`
-	Bots              *Bots             `yaml:"bots,flow"`
-	HealthCheckReport bool              `yaml:"health_check_report,flow"`
+	APIOptions     *RestAPIOptions   `yaml:"api_options"`
+	JobsFromConfig []*JobsFromConfig `yaml:"jobs,flow"`
+	Bots           *Bots             `yaml:"bots,flow"`
+	HealthCheck    *HealthCheck      `yaml:"health_check,flow"`
 }
 
 type RestAPIOptions struct {
 	Port   string `yaml:"port"`
 	Scheme string `yaml:"scheme"`
+}
+
+type HealthCheck struct {
+	Active bool `yaml:"active,flow"`
+	Report bool `yaml:"report,flow"`
 }
 
 type JobsFromConfig struct {
@@ -42,6 +47,7 @@ const (
 	Docker  FailureType = "Docker"
 	Service FailureType = "Service"
 	CPU     FailureType = "CPU"
+	Server  FailureType = "Server"
 )
 
 func GetConfig(file string) (*Config, error) {
@@ -54,8 +60,11 @@ func unmarshalConfFromFile(file string) (*Config, error) {
 		Scheme: "http",
 	}
 	DefaultConfig := Config{
-		APIOptions:        DefaultRestAPI,
-		HealthCheckReport: false,
+		APIOptions: DefaultRestAPI,
+		HealthCheck: &HealthCheck{
+			Active: false,
+			Report: false,
+		},
 	}
 
 	config := DefaultConfig
@@ -90,9 +99,9 @@ func (config *Config) validate() error {
 			if jobFromConfig.ComponentName == "" {
 				return fmt.Errorf("failure type {%s} should have component_name", jobFromConfig.FailureType)
 			}
-		} else if jobFromConfig.FailureType == CPU {
+		} else if jobFromConfig.FailureType == CPU || jobFromConfig.FailureType == Server {
 			if jobFromConfig.ComponentName != "" {
-				return errors.New("Job CPU should not have component_name")
+				return fmt.Errorf("job {%s} should not have component_name", jobFromConfig.FailureType)
 			}
 		}
 

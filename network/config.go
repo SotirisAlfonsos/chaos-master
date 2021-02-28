@@ -31,6 +31,7 @@ type Connection interface {
 	GetServiceClient(target string) (v1.ServiceClient, error)
 	GetDockerClient(target string) (v1.DockerClient, error)
 	GetCPUClient(target string) (v1.CPUClient, error)
+	GetServerClient(target string) (v1.ServerClient, error)
 	GetHealthClient(target string) (v1.HealthClient, error)
 }
 
@@ -186,6 +187,14 @@ func (connection *connection) GetCPUClient(target string) (v1.CPUClient, error) 
 		return nil, err
 	}
 	return v1.NewCPUClient(connection.clientConnection), nil
+}
+
+func (connection *connection) GetServerClient(target string) (v1.ServerClient, error) {
+	err := connection.redialForTarget(target)
+	if err != nil {
+		return nil, err
+	}
+	return v1.NewServerClient(connection.clientConnection), nil
 }
 
 func (connection *connection) GetHealthClient(target string) (v1.HealthClient, error) {

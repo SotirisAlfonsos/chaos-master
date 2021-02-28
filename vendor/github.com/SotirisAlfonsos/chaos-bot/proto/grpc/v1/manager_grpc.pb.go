@@ -380,86 +380,86 @@ var CPU_ServiceDesc = grpc.ServiceDesc{
 	Metadata: "manager.proto",
 }
 
-// StrategyClient is the client API for Strategy service.
+// ServerClient is the client API for Server service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type StrategyClient interface {
-	Recover(ctx context.Context, in *RecoverRequest, opts ...grpc.CallOption) (*ResolveResponse, error)
+type ServerClient interface {
+	Stop(ctx context.Context, in *ServerRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 }
 
-type strategyClient struct {
+type serverClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewStrategyClient(cc grpc.ClientConnInterface) StrategyClient {
-	return &strategyClient{cc}
+func NewServerClient(cc grpc.ClientConnInterface) ServerClient {
+	return &serverClient{cc}
 }
 
-func (c *strategyClient) Recover(ctx context.Context, in *RecoverRequest, opts ...grpc.CallOption) (*ResolveResponse, error) {
-	out := new(ResolveResponse)
-	err := c.cc.Invoke(ctx, "/v1.Strategy/Recover", in, out, opts...)
+func (c *serverClient) Stop(ctx context.Context, in *ServerRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+	out := new(StatusResponse)
+	err := c.cc.Invoke(ctx, "/v1.Server/Stop", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// StrategyServer is the server API for Strategy service.
-// All implementations must embed UnimplementedStrategyServer
+// ServerServer is the server API for Server service.
+// All implementations must embed UnimplementedServerServer
 // for forward compatibility
-type StrategyServer interface {
-	Recover(context.Context, *RecoverRequest) (*ResolveResponse, error)
-	mustEmbedUnimplementedStrategyServer()
+type ServerServer interface {
+	Stop(context.Context, *ServerRequest) (*StatusResponse, error)
+	mustEmbedUnimplementedServerServer()
 }
 
-// UnimplementedStrategyServer must be embedded to have forward compatible implementations.
-type UnimplementedStrategyServer struct {
+// UnimplementedServerServer must be embedded to have forward compatible implementations.
+type UnimplementedServerServer struct {
 }
 
-func (UnimplementedStrategyServer) Recover(context.Context, *RecoverRequest) (*ResolveResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Recover not implemented")
+func (UnimplementedServerServer) Stop(context.Context, *ServerRequest) (*StatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Stop not implemented")
 }
-func (UnimplementedStrategyServer) mustEmbedUnimplementedStrategyServer() {}
+func (UnimplementedServerServer) mustEmbedUnimplementedServerServer() {}
 
-// UnsafeStrategyServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to StrategyServer will
+// UnsafeServerServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ServerServer will
 // result in compilation errors.
-type UnsafeStrategyServer interface {
-	mustEmbedUnimplementedStrategyServer()
+type UnsafeServerServer interface {
+	mustEmbedUnimplementedServerServer()
 }
 
-func RegisterStrategyServer(s grpc.ServiceRegistrar, srv StrategyServer) {
-	s.RegisterService(&Strategy_ServiceDesc, srv)
+func RegisterServerServer(s grpc.ServiceRegistrar, srv ServerServer) {
+	s.RegisterService(&Server_ServiceDesc, srv)
 }
 
-func _Strategy_Recover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RecoverRequest)
+func _Server_Stop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ServerRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(StrategyServer).Recover(ctx, in)
+		return srv.(ServerServer).Stop(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1.Strategy/Recover",
+		FullMethod: "/v1.Server/Stop",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StrategyServer).Recover(ctx, req.(*RecoverRequest))
+		return srv.(ServerServer).Stop(ctx, req.(*ServerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// Strategy_ServiceDesc is the grpc.ServiceDesc for Strategy service.
+// Server_ServiceDesc is the grpc.ServiceDesc for Server service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Strategy_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "v1.Strategy",
-	HandlerType: (*StrategyServer)(nil),
+var Server_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "v1.Server",
+	HandlerType: (*ServerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Recover",
-			Handler:    _Strategy_Recover_Handler,
+			MethodName: "Stop",
+			Handler:    _Server_Stop_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

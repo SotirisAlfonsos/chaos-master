@@ -37,9 +37,12 @@ func main() {
 	connections := network.GetConnectionPool(conf, logger)
 	jobMap := conf.GetJobMap(logger)
 
-	healthChecker := healthcheck.Register(connections, logger)
-	healthChecker.Start(conf.HealthCheckReport)
+	var healthChecker *healthcheck.HealthChecker
 
+	if conf.HealthCheck.Active {
+		healthChecker := healthcheck.Register(connections, logger)
+		healthChecker.Start(conf.HealthCheck.Report)
+	}
 	options := api.NewAPIOptions(conf.APIOptions, jobMap, connections, logger)
 	restAPI := api.NewRestAPI(options, healthChecker)
 	restAPI.RunAPIController()

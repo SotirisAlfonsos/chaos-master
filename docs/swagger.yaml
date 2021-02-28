@@ -68,6 +68,13 @@ definitions:
       status:
         type: integer
     type: object
+  server.RequestPayload:
+    properties:
+      job:
+        type: string
+      target:
+        type: string
+    type: object
   service.RequestPayload:
     properties:
       job:
@@ -205,6 +212,42 @@ paths:
       summary: recover from failures
       tags:
       - Recover
+  /server:
+    post:
+      consumes:
+      - application/json
+      description: Perform Server fault injection. Supports action to stop the server
+        specified. A shutdown will be executed after 1 minute.
+      parameters:
+      - description: Specify to perform a stop action on the server
+        in: query
+        name: action
+        required: true
+        type: string
+      - description: Specify the job name and target
+        in: body
+        name: requestPayload
+        required: true
+        schema:
+          $ref: '#/definitions/server.RequestPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Payload'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Payload'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Payload'
+      summary: Inject Server failures
+      tags:
+      - Failure injections
   /service:
     post:
       consumes:

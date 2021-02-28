@@ -205,6 +205,59 @@ var doc = `{
                 }
             }
         },
+        "/server": {
+            "post": {
+                "description": "Perform Server fault injection. Supports action to stop the server specified. A shutdown will be executed after 1 minute.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Failure injections"
+                ],
+                "summary": "Inject Server failures",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Specify to perform a stop action on the server",
+                        "name": "action",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "Specify the job name and target",
+                        "name": "requestPayload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.RequestPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Payload"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Payload"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Payload"
+                        }
+                    }
+                }
+            }
+        },
         "/service": {
             "post": {
                 "description": "Perform start or stop action on a service",
@@ -363,6 +416,17 @@ var doc = `{
                 },
                 "status": {
                     "type": "integer"
+                }
+            }
+        },
+        "server.RequestPayload": {
+            "type": "object",
+            "properties": {
+                "job": {
+                    "type": "string"
+                },
+                "target": {
+                    "type": "string"
                 }
             }
         },

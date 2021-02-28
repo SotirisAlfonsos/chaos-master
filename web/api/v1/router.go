@@ -8,6 +8,7 @@ import (
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/cpu"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/docker"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/recover"
+	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/server"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/service"
 	"github.com/go-kit/kit/log"
 	"github.com/gorilla/mux"
@@ -41,7 +42,9 @@ func (r *APIRouter) AddRoutes(healthChecker *healthcheck.HealthChecker, router *
 	router = router.PathPrefix(base).Subrouter()
 	setBotRouters(router, r)
 	setRecoverRouter(router, r)
-	setStatusRouter(healthChecker, router, r.logger)
+	if healthChecker != nil {
+		setStatusRouter(healthChecker, router, r.logger)
+	}
 	setSwaggerRouter(router)
 
 	return router
@@ -51,6 +54,7 @@ func setBotRouters(router *mux.Router, r *APIRouter) {
 	serviceControllerRouter(router, r)
 	dockerControllerRouter(router, r)
 	cpuControllerRouter(router, r)
+	serverControllerRouter(router, r)
 }
 
 func setRecoverRouter(router *mux.Router, r *APIRouter) {
@@ -81,6 +85,13 @@ func dockerControllerRouter(router *mux.Router, r *APIRouter) {
 func cpuControllerRouter(router *mux.Router, r *APIRouter) {
 	cController := cpu.NewCPUController(filterJobsOnType(r.jobMap, config.CPU), r.connections, r.Cache, r.logger)
 	router.HandleFunc("/cpu", cController.CPUAction).
+		Queries("action", "{action}").
+		Methods("POST")
+}
+
+func serverControllerRouter(router *mux.Router, r *APIRouter) {
+	s := server.NewServerController(filterJobsOnType(r.jobMap, config.Server), r.connections, r.logger)
+	router.HandleFunc("/server", s.ServerAction).
 		Queries("action", "{action}").
 		Methods("POST")
 }

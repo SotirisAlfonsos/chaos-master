@@ -23,4 +23,5 @@ jobs:
     type: "CPU"
     targets: ['127.0.0.1:8081']
 
-health_check_report: true
+health_check:
+  report: true

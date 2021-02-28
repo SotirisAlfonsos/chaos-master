@@ -2,25 +2,23 @@ package service
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
+	"github.com/SotirisAlfonsos/chaos-master/network"
 
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/config"
+	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
 	"github.com/go-kit/kit/log"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -39,64 +37,6 @@ type TestData struct {
 type expectedResult struct {
 	cacheSize int
 	payload   *response.Payload
-}
-
-type mockServiceClient struct {
-	Status *v1.StatusResponse
-	Error  error
-}
-
-func GetMockServiceClient(status *v1.StatusResponse, err error) v1.ServiceClient {
-	return &mockServiceClient{Status: status, Error: err}
-}
-
-func (msc *mockServiceClient) Start(ctx context.Context, in *v1.ServiceRequest, opts ...grpc.CallOption) (*v1.StatusResponse, error) {
-	return msc.Status, msc.Error
-}
-
-func (msc *mockServiceClient) Stop(ctx context.Context, in *v1.ServiceRequest, opts ...grpc.CallOption) (*v1.StatusResponse, error) {
-	return msc.Status, msc.Error
-}
-
-type connection struct {
-	status *v1.StatusResponse
-	err    error
-}
-
-func (connection *connection) GetServiceClient(target string) (v1.ServiceClient, error) {
-	return GetMockServiceClient(connection.status, connection.err), nil
-}
-
-func (connection *connection) GetDockerClient(target string) (v1.DockerClient, error) {
-	return nil, nil
-}
-
-func (connection *connection) GetCPUClient(target string) (v1.CPUClient, error) {
-	return nil, nil
-}
-
-func (connection *connection) GetHealthClient(target string) (v1.HealthClient, error) {
-	return nil, nil
-}
-
-type failedConnection struct {
-	err error
-}
-
-func (failedConnection *failedConnection) GetServiceClient(target string) (v1.ServiceClient, error) {
-	return nil, failedConnection.err
-}
-
-func (failedConnection *failedConnection) GetDockerClient(target string) (v1.DockerClient, error) {
-	return nil, nil
-}
-
-func (failedConnection *failedConnection) GetCPUClient(target string) (v1.CPUClient, error) {
-	return nil, nil
-}
-
-func (failedConnection *failedConnection) GetHealthClient(target string) (v1.HealthClient, error) {
-	return nil, nil
 }
 
 func TestStartServiceSuccess(t *testing.T) {
@@ -338,7 +278,7 @@ func newServiceJob(componentName string, targets ...string) *config.Job {
 }
 
 func withSuccessServiceConnection() *sConnection {
-	connection := &connection{status: new(v1.StatusResponse), err: nil}
+	connection := &network.MockConnection{Status: new(v1.StatusResponse), Err: nil}
 	return &sConnection{
 		connection: connection,
 	}
@@ -347,7 +287,7 @@ func withSuccessServiceConnection() *sConnection {
 func withFailureServiceConnection() *sConnection {
 	statusResponse := new(v1.StatusResponse)
 	statusResponse.Status = v1.StatusResponse_FAIL
-	connection := &connection{status: statusResponse, err: nil}
+	connection := &network.MockConnection{Status: statusResponse, Err: nil}
 	return &sConnection{
 		connection: connection,
 	}
@@ -356,14 +296,14 @@ func withFailureServiceConnection() *sConnection {
 func withErrorServiceConnection(errorMessage string) *sConnection {
 	statusResponse := new(v1.StatusResponse)
 	statusResponse.Status = v1.StatusResponse_FAIL
-	connection := &connection{status: statusResponse, err: errors.New(errorMessage)}
+	connection := &network.MockConnection{Status: statusResponse, Err: errors.New(errorMessage)}
 	return &sConnection{
 		connection: connection,
 	}
 }
 
 func withFailureToSetServiceConnection(errorMessage string) *sConnection {
-	connection := &failedConnection{err: errors.New(errorMessage)}
+	connection := &network.MockFailedConnection{Err: errors.New(errorMessage)}
 	return &sConnection{
 		connection: connection,
 	}

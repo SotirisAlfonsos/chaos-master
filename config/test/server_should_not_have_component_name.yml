@@ -1,0 +1,5 @@
+jobs:
+  - job_name: "server injection"
+    type: "Server"
+    component_name: "simple"
+    targets: ['127.0.0.1:8081']

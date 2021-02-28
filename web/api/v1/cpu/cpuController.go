@@ -79,10 +79,7 @@ type RequestPayload struct {
 
 func newCPURequest(details *RequestPayload) *v1.CPURequest {
 	return &v1.CPURequest{
-		Percentage:           details.Percentage,
-		XXX_NoUnkeyedLiteral: struct{}{},
-		XXX_unrecognized:     nil,
-		XXX_sizecache:        0,
+		Percentage: details.Percentage,
 	}
 }
 
