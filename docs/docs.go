@@ -165,6 +165,59 @@ var doc = `{
                 }
             }
         },
+        "/network": {
+            "post": {
+                "description": "Start and stop network failures",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Failure injections"
+                ],
+                "summary": "Inject network failures",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Specify to perform a start or a stop for a network failure injection",
+                        "name": "action",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "Specify the job name, device name, target and netem injection arguments",
+                        "name": "requestPayload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/network.RequestPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Payload"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Payload"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Payload"
+                        }
+                    }
+                }
+            }
+        },
         "/recover/alertmanager": {
             "post": {
                 "description": "Alertmanager webhook to recover from failures",
@@ -335,6 +388,59 @@ var doc = `{
                 },
                 "job": {
                     "type": "string"
+                },
+                "target": {
+                    "type": "string"
+                }
+            }
+        },
+        "network.RequestPayload": {
+            "type": "object",
+            "properties": {
+                "corrupt correlation": {
+                    "type": "number"
+                },
+                "corrupt probability": {
+                    "type": "number"
+                },
+                "delay correlation": {
+                    "type": "number"
+                },
+                "device": {
+                    "type": "string"
+                },
+                "duplicate": {
+                    "type": "number"
+                },
+                "duplicate correlation": {
+                    "type": "number"
+                },
+                "gap": {
+                    "type": "integer"
+                },
+                "jitter": {
+                    "type": "integer"
+                },
+                "job": {
+                    "type": "string"
+                },
+                "latency": {
+                    "type": "integer"
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "loss": {
+                    "type": "number"
+                },
+                "loss correlation": {
+                    "type": "number"
+                },
+                "reorder correlation": {
+                    "type": "number"
+                },
+                "reorder probability": {
+                    "type": "number"
                 },
                 "target": {
                     "type": "string"

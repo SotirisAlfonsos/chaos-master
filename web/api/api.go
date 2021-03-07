@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/SotirisAlfonsos/chaos-master/cache"
@@ -28,25 +29,25 @@ func (restAPI *RestAPI) RunAPIController() {
 
 	_ = level.Info(restAPI.Logger).Log("msg", "starting web server on port "+restAPI.Port)
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
 	go func() {
-		if err := server.ListenAndServe(); err != nil {
-			_ = level.Error(restAPI.Logger).Log("msg", "Can not start web server", "err", err)
+		<-c
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		_ = level.Info(restAPI.Logger).Log("msg", "Gracefully shutting down server")
+
+		err := server.Shutdown(ctx)
+		if err != nil {
+			_ = level.Error(restAPI.Logger).Log("msg", "could not gracefully shut down server", "err", err)
 		}
+		cancel()
+		os.Exit(0)
 	}()
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-
-	<-c
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15)
-
-	err := server.Shutdown(ctx)
-	if err != nil {
-		_ = level.Info(restAPI.Logger).Log("msg", "Gracefully shutting down server")
+	if err := server.ListenAndServe(); err != nil {
+		_ = level.Error(restAPI.Logger).Log("msg", "Can not start web server", "err", err)
 	}
-	cancel()
-	os.Exit(0)
 }
 
 type Options struct {

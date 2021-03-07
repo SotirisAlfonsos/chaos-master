@@ -21,6 +21,9 @@ jobs:
   - job_name: "server injection"
     type: "Server"
     targets: ['127.0.0.1:8084']
+  - job_name: "network injection"
+    type: "Network"
+    targets: ['127.0.0.1:8084']
 
 bots:
   peer_token: 1234

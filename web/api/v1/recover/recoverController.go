@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/go-kit/kit/log/level"
+
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
@@ -124,13 +126,14 @@ func (rController *RController) performAsync(
 ) {
 	go func() {
 		defer wg.Done()
-		recoverMsg := action(&key, val, rController.cacheManager)
+		recoverMsg := rController.action(&key, val)
 		resp.RecoverMessage = append(resp.RecoverMessage, recoverMsg)
 	}()
 }
 
-func action(key *cache.Key, function func() (*v1.StatusResponse, error), cache *cache.Manager) *response.RecoverMessage {
+func (rController *RController) action(key *cache.Key, function func() (*v1.StatusResponse, error)) *response.RecoverMessage {
 	statusResponse, err := function()
+	_ = level.Info(rController.logger).Log("msg", fmt.Sprintf("recover job item {%s} from cache on target {%s}", key.Job, key.Target))
 
 	switch {
 	case err != nil:
@@ -138,7 +141,7 @@ func action(key *cache.Key, function func() (*v1.StatusResponse, error), cache *
 	case statusResponse.Status != v1.StatusResponse_SUCCESS:
 		return response.FailureRecoverResponse(fmt.Sprintf("Failure response from target {%s}", key.Target))
 	}
-	cache.Delete(key)
+	rController.cacheManager.Delete(key)
 	message := fmt.Sprintf("Response from target {%s}, {%s}, {%s}", key.Target, statusResponse.Message, statusResponse.Status)
 	return response.SuccessRecoverResponse(message)
 }

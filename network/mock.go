@@ -28,6 +28,10 @@ func (connection *MockConnection) GetServerClient(string) (v1.ServerClient, erro
 	return GetMockServerClient(connection.Status, connection.Err), nil
 }
 
+func (connection *MockConnection) GetNetworkClient(string) (v1.NetworkClient, error) {
+	return GetMockNetworkClient(connection.Status, connection.Err), nil
+}
+
 func (connection *MockConnection) GetHealthClient(string) (v1.HealthClient, error) {
 	return nil, nil
 }
@@ -52,6 +56,9 @@ func (failedConnection *MockFailedConnection) GetServerClient(string) (v1.Server
 	return nil, failedConnection.Err
 }
 
+func (failedConnection *MockFailedConnection) GetNetworkClient(string) (v1.NetworkClient, error) {
+	return nil, failedConnection.Err
+}
 func (failedConnection *MockFailedConnection) GetHealthClient(string) (v1.HealthClient, error) {
 	return nil, failedConnection.Err
 }
@@ -118,4 +125,21 @@ func GetMockServerClient(status *v1.StatusResponse, err error) v1.ServerClient {
 
 func (msc *mockServerClient) Stop(_ context.Context, _ *v1.ServerRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
 	return msc.Status, msc.Error
+}
+
+type mockNetworkClient struct {
+	Status *v1.StatusResponse
+	Error  error
+}
+
+func GetMockNetworkClient(status *v1.StatusResponse, err error) v1.NetworkClient {
+	return &mockNetworkClient{Status: status, Error: err}
+}
+
+func (mcc *mockNetworkClient) Start(_ context.Context, _ *v1.NetworkRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
+	return mcc.Status, mcc.Error
+}
+
+func (mcc *mockNetworkClient) Stop(_ context.Context, _ *v1.NetworkRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
+	return mcc.Status, mcc.Error
 }

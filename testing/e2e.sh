@@ -7,6 +7,13 @@ verifyOK () {
   fi
 }
 
+verifyEMPTY () {
+  if (($#)); then
+    printf "\n"%"s\n" "------------ E2e test FAILURE ------------"
+    exit 1
+  fi
+}
+
 startService () {
   echo $(curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/service?action=start" \
   -H "Content-Type: application/json" \
@@ -49,6 +56,12 @@ stopServer () {
   -d '{"job": '\""$1"\"', "target": '\""$2"\"'}' | grep -E -i "$3")
 }
 
+startNetworkInjection () {
+  echo $(curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/network?action=start" \
+  -H "Content-Type: application/json" \
+  -d '{"job": '\""$1"\"', "device": '\""$2"\"', "target": '\""$3"\"', "loss": '10.5', "loss correlation": '10.5'}' | grep -E -i "$4")
+}
+
 printf %"s\n" "------------ Init start service and container ------------"
 out=$(startService "zookeeper service" "simple" "127.0.0.1:8081" '"status":200')
 verifyOK $out
@@ -63,6 +76,14 @@ printf "\n"%"s\n" "------------ Start CPU failure ------------"
 out=$(startCPUInjection "cpu_injection" 10 "127.0.0.1:8081" '"status":200')
 verifyOK $out
 
+printf "\n"%"s\n" "------------ Start Network failure ------------"
+out=$(startNetworkInjection "network injection" "lo" "127.0.0.1:8081" '"status":200')
+verifyOK $out
+
+printf "\n"%"s\n" "------------ Verify Network failure ------------"
+verifyOK echo $(tc qdisc show | grep "netem 1")
+
+printf "\n"%"s\n" "------------ Sleep for 1 minute ------------"
 sleep 1m
 
 printf "\n"%"s\n" "------------ Start not existing service and container ------------"
@@ -103,6 +124,8 @@ out=$(curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/recover/alertmanager"
 -d '{"alerts": [{"status": "firing", "labels": {"recoverJob": "zookeeper docker"}}]}' | grep -E -i '"status":200')
 verifyOK $out
 
+printf "\n"%"s\n" "------------ Verify NO Network failure ------------"
+verifyEMPTY $(tc qdisc show | grep -E -i "netem 1")
 
 printf "\n"%"s\n" "------------ Stop server ------------"
 out=$(stopServer "server_injection" "127.0.0.1:8081" '"status":200')

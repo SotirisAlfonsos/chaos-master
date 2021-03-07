@@ -48,6 +48,7 @@ const (
 	Service FailureType = "Service"
 	CPU     FailureType = "CPU"
 	Server  FailureType = "Server"
+	Network FailureType = "Network"
 )
 
 func GetConfig(file string) (*Config, error) {
@@ -91,24 +92,33 @@ func unmarshalConfFromFile(file string) (*Config, error) {
 
 func (config *Config) validate() error {
 	for _, jobFromConfig := range config.JobsFromConfig {
-		if jobFromConfig.JobName == "" || jobFromConfig.FailureType == "" {
-			return errors.New("Every job should contain a job_name and type")
-		}
-
-		if jobFromConfig.FailureType == Docker || jobFromConfig.FailureType == Service {
-			if jobFromConfig.ComponentName == "" {
-				return fmt.Errorf("failure type {%s} should have component_name", jobFromConfig.FailureType)
-			}
-		} else if jobFromConfig.FailureType == CPU || jobFromConfig.FailureType == Server {
-			if jobFromConfig.ComponentName != "" {
-				return fmt.Errorf("job {%s} should not have component_name", jobFromConfig.FailureType)
-			}
-		}
-
-		if strings.Contains(jobFromConfig.JobName, ",") {
-			return errors.New("The job name and the component name should not contain the unique operator \",\"")
+		err := validate(jobFromConfig)
+		if err != nil {
+			return err
 		}
 	}
+	return nil
+}
+
+func validate(job *JobsFromConfig) error {
+	if job.JobName == "" || job.FailureType == "" {
+		return errors.New("Every job should contain a job_name and type")
+	}
+
+	if job.FailureType == Docker || job.FailureType == Service {
+		if job.ComponentName == "" {
+			return fmt.Errorf("failure type {%s} should have component_name", job.FailureType)
+		}
+	} else if job.FailureType == CPU || job.FailureType == Server || job.FailureType == Network {
+		if job.ComponentName != "" {
+			return fmt.Errorf("job {%s} should not have component_name", job.FailureType)
+		}
+	}
+
+	if strings.Contains(job.JobName, ",") {
+		return errors.New("The job name and the component name should not contain the unique operator \",\"")
+	}
+
 	return nil
 }
 

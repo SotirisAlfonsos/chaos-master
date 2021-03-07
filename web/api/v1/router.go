@@ -7,6 +7,7 @@ import (
 	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/cpu"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/docker"
+	apiNetwork "github.com/SotirisAlfonsos/chaos-master/web/api/v1/network"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/recover"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/server"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/service"
@@ -55,6 +56,7 @@ func setBotRouters(router *mux.Router, r *APIRouter) {
 	dockerControllerRouter(router, r)
 	cpuControllerRouter(router, r)
 	serverControllerRouter(router, r)
+	networkControllerRouter(router, r)
 }
 
 func setRecoverRouter(router *mux.Router, r *APIRouter) {
@@ -92,6 +94,13 @@ func cpuControllerRouter(router *mux.Router, r *APIRouter) {
 func serverControllerRouter(router *mux.Router, r *APIRouter) {
 	s := server.NewServerController(filterJobsOnType(r.jobMap, config.Server), r.connections, r.logger)
 	router.HandleFunc("/server", s.ServerAction).
+		Queries("action", "{action}").
+		Methods("POST")
+}
+
+func networkControllerRouter(router *mux.Router, r *APIRouter) {
+	n := apiNetwork.NewNetworkController(filterJobsOnType(r.jobMap, config.Network), r.connections, r.Cache, r.logger)
+	router.HandleFunc("/network", n.NetworkAction).
 		Queries("action", "{action}").
 		Methods("POST")
 }

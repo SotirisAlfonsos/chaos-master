@@ -3,7 +3,7 @@ module github.com/SotirisAlfonsos/chaos-master
 go 1.13
 
 require (
-	github.com/SotirisAlfonsos/chaos-bot v0.0.0-20210221230933-7c2777ce912e
+	github.com/SotirisAlfonsos/chaos-bot v0.0.0-20210306232632-7e89674dc52a
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
 	github.com/go-kit/kit v0.10.0
 	github.com/gorilla/mux v1.8.0

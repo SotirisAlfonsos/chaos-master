@@ -6,7 +6,7 @@ github.com/KyleBanks/depth
 github.com/PuerkitoBio/purell
 # github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578
 github.com/PuerkitoBio/urlesc
-# github.com/SotirisAlfonsos/chaos-bot v0.0.0-20210221230933-7c2777ce912e
+# github.com/SotirisAlfonsos/chaos-bot v0.0.0-20210306232632-7e89674dc52a
 github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1
 # github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
 github.com/alecthomas/template

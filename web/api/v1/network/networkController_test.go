@@ -1,4 +1,4 @@
-package cpu
+package network
 
 import (
 	"bytes"
@@ -8,11 +8,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/SotirisAlfonsos/chaos-master/network"
+
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/config"
-	"github.com/SotirisAlfonsos/chaos-master/network"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
 	"github.com/go-kit/kit/log"
 	"github.com/gorilla/mux"
@@ -27,7 +28,7 @@ var (
 type TestData struct {
 	message        string
 	jobMap         map[string]*config.Job
-	connectionPool map[string]*cConnection
+	connectionPool map[string]*nConnection
 	cacheItems     map[*cache.Key]func() (*v1.StatusResponse, error)
 	requestPayload *RequestPayload
 	expected       *expectedResult
@@ -38,33 +39,33 @@ type expectedResult struct {
 	payload   *response.Payload
 }
 
-func TestStartCPUSuccess(t *testing.T) {
+func TestStartNetworkSuccess(t *testing.T) {
 	dataItems := []TestData{
 		{
-			message: "Successfully start cpu injection with specific job and target and add it in cache",
+			message: "Successfully start network injection with specific job and target and add to an empty cache",
 			jobMap: map[string]*config.Job{
-				"job name":           newCPUJob("127.0.0.1", "127.0.0.2"),
-				"job different name": newCPUJob("127.0.0.1", "127.0.0.2"),
+				"job name":           newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*cConnection{
-				"127.0.0.1": withSuccessCPUConnection(),
-				"127.0.0.2": withSuccessCPUConnection(),
+			connectionPool: map[string]*nConnection{
+				"127.0.0.1": withSuccessNetworkConnection(),
+				"127.0.0.2": withSuccessNetworkConnection(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", Percentage: 100, Target: "127.0.0.1"},
+			requestPayload: &RequestPayload{Job: "job name", Device: "device name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 		{
-			message: "Successfully start cpu injection with specific job and target and dont add it in cache if already exists",
+			message: "Successfully start network injection with specific job and target and not add to the cache if already present",
 			jobMap: map[string]*config.Job{
-				"job name": newCPUJob("127.0.0.1", "127.0.0.2"),
+				"job name": newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*cConnection{
-				"127.0.0.1": withSuccessCPUConnection(),
+			connectionPool: map[string]*nConnection{
+				"127.0.0.1": withSuccessNetworkConnection(),
 			},
 			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
 				&cache.Key{Job: "job name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", Percentage: 100, Target: "127.0.0.1"},
+			requestPayload: &RequestPayload{Job: "job name", Device: "device name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 	}
@@ -74,36 +75,36 @@ func TestStartCPUSuccess(t *testing.T) {
 	}
 }
 
-func TestStopServiceSuccess(t *testing.T) {
+func TestStopNetworkSuccess(t *testing.T) {
 	dataItems := []TestData{
 		{
-			message: "Successfully stop CPU injection with specific job and target and dont add it in cache",
+			message: "Successfully stop network injection with specific job and target and dont change anything with the cache",
 			jobMap: map[string]*config.Job{
-				"job name":           newCPUJob("127.0.0.1", "127.0.0.2"),
-				"job different name": newCPUJob("127.0.0.1", "127.0.0.2"),
+				"job name":           newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*cConnection{
-				"127.0.0.1": withSuccessCPUConnection(),
-				"127.0.0.2": withSuccessCPUConnection(),
+			connectionPool: map[string]*nConnection{
+				"127.0.0.1": withSuccessNetworkConnection(),
+				"127.0.0.2": withSuccessNetworkConnection(),
 			},
 			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
 				&cache.Key{Job: "job name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
+			requestPayload: &RequestPayload{Job: "job name", Device: "device name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 1, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 		{
-			message: "Successfully stop CPU injection with specific job and target and remove it from cache",
+			message: "Successfully stop network injection with specific job and target and remove it from the cache",
 			jobMap: map[string]*config.Job{
-				"job name": newCPUJob("cpu name", "127.0.0.1", "127.0.0.2"),
+				"job name": newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*cConnection{
-				"127.0.0.1": withSuccessCPUConnection(),
+			connectionPool: map[string]*nConnection{
+				"127.0.0.1": withSuccessNetworkConnection(),
 			},
 			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
 				&cache.Key{Job: "job name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
+			requestPayload: &RequestPayload{Job: "job name", Device: "device name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 0, payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 	}
@@ -113,33 +114,30 @@ func TestStopServiceSuccess(t *testing.T) {
 	}
 }
 
-func TestCPUActionOneOfJobTargetDoesNotExist(t *testing.T) {
+func TestNetworkActionOneOfJobContainerNameTargetDoesNotExist(t *testing.T) {
 	dataItems := []TestData{
 		{
 			message: "Should receive bad request and not update cache for action when job name does not exist",
 			jobMap: map[string]*config.Job{
-				"job name":           newCPUJob("127.0.0.1", "127.0.0.2"),
-				"job different name": newCPUJob("127.0.0.1", "127.0.0.2"),
+				"job name":           newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*cConnection{
-				"127.0.0.1": withSuccessCPUConnection(),
+			connectionPool: map[string]*nConnection{
+				"127.0.0.1": withSuccessNetworkConnection(),
 			},
-			requestPayload: &RequestPayload{Job: "job name does not exist", Target: "127.0.0.1"},
+			requestPayload: &RequestPayload{Job: "job name does not exist", Device: "device name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("Could not find job {job name does not exist}")},
 		},
 		{
-			message: "Should receive bad request and not update cache for action when target name does not exist for job",
+			message: "Should receive bad request and not update cache for action when target does not exist for the job specified",
 			jobMap: map[string]*config.Job{
-				"job name": newCPUJob("127.0.0.1", "127.0.0.2"),
+				"job name": newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*cConnection{
-				"127.0.0.1": withSuccessCPUConnection(),
+			connectionPool: map[string]*nConnection{
+				"127.0.0.1": withSuccessNetworkConnection(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.3"},
-			expected: &expectedResult{
-				cacheSize: 0,
-				payload:   badRequestResponse("Target {127.0.0.3} is not registered for job {job name}"),
-			},
+			requestPayload: &RequestPayload{Job: "job name", Device: "device name", Target: "0.0.0.0"},
+			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("Target {0.0.0.0} is not registered for job {job name}")},
 		},
 	}
 
@@ -154,29 +152,29 @@ func TestCPUActionOneOfJobTargetDoesNotExist(t *testing.T) {
 	}
 }
 
-func TestCPUActionFailure(t *testing.T) {
+func TestNetworkActionFailure(t *testing.T) {
 	dataItems := []TestData{
 		{
 			message: "Should receive internal server error and not update cache if the request fails on bot",
 			jobMap: map[string]*config.Job{
-				"job name":           newCPUJob("127.0.0.1", "127.0.0.2"),
-				"job different name": newCPUJob("127.0.0.1", "127.0.0.2"),
+				"job name":           newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
+				"job different name": newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*cConnection{
-				"127.0.0.1": withFailureCPUConnection(),
+			connectionPool: map[string]*nConnection{
+				"127.0.0.1": withFailureNetworkConnection(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
+			requestPayload: &RequestPayload{Job: "job name", Device: "device name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 0, payload: internalServerErrorResponse("Failure response from target {127.0.0.1}")},
 		},
 		{
 			message: "Should receive internal server error and not update cache if the request errors on bot",
 			jobMap: map[string]*config.Job{
-				"job name": newCPUJob("127.0.0.1", "127.0.0.2"),
+				"job name": newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*cConnection{
-				"127.0.0.1": withErrorCPUConnection("error occurred"),
+			connectionPool: map[string]*nConnection{
+				"127.0.0.1": withErrorNetworkConnection("error occurred"),
 			},
-			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
+			requestPayload: &RequestPayload{Job: "job name", Device: "device name", Target: "127.0.0.1"},
 			expected: &expectedResult{
 				cacheSize: 0, payload: internalServerErrorResponse("Error response from target {127.0.0.1}: error occurred")},
 		},
@@ -193,18 +191,18 @@ func TestCPUActionFailure(t *testing.T) {
 	}
 }
 
-func TestCPUActionWithNoGrpcConnectionToTarget(t *testing.T) {
+func TestNetworkActionWithNoGrpcConnectionToTarget(t *testing.T) {
 	dataItems := []TestData{
 		{
 			message: "Should receive bad request and not update cache if the action to perform is invalid",
 			jobMap: map[string]*config.Job{
-				"job name": newCPUJob("127.0.0.1", "127.0.0.2"),
+				"job name": newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*cConnection{
-				"127.0.0.1": withFailureToSetCPUConnection("Can not dial target"),
+			connectionPool: map[string]*nConnection{
+				"127.0.0.1": withFailureToSetNetworkConnection("Can not dial target"),
 			},
-			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
-			expected:       &expectedResult{cacheSize: 0, payload: internalServerErrorResponse("Can not get cpu connection for target {127.0.0.1}: Can not dial target")},
+			requestPayload: &RequestPayload{Job: "job name", Device: "device name", Target: "127.0.0.1"},
+			expected:       &expectedResult{cacheSize: 0, payload: internalServerErrorResponse("Can not get network connection from target {127.0.0.1}: Can not dial target")},
 		},
 	}
 
@@ -214,17 +212,17 @@ func TestCPUActionWithNoGrpcConnectionToTarget(t *testing.T) {
 	}
 }
 
-func TestCPUWithInvalidAction(t *testing.T) {
+func TestNetworkWithInvalidAction(t *testing.T) {
 	dataItems := []TestData{
 		{
 			message: "Should receive bad request and not update cache if the action to perform is invalid",
 			jobMap: map[string]*config.Job{
-				"job name": newCPUJob("127.0.0.1", "127.0.0.2"),
+				"job name": newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
 			},
-			connectionPool: map[string]*cConnection{
-				"127.0.0.1": withSuccessCPUConnection(),
+			connectionPool: map[string]*nConnection{
+				"127.0.0.1": withSuccessNetworkConnection(),
 			},
-			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
+			requestPayload: &RequestPayload{Job: "job name", Device: "device name", Target: "127.0.0.1"},
 			expected:       &expectedResult{cacheSize: 0, payload: badRequestResponse("The action {invalidAction} is not supported")},
 		},
 	}
@@ -238,12 +236,12 @@ func TestCPUWithInvalidAction(t *testing.T) {
 func assertActionPerformed(t *testing.T, dataItem TestData, action string) {
 	t.Run(dataItem.message, func(t *testing.T) {
 		cacheManager := cache.NewCacheManager(logger)
-		server, err := cpuHTTPTestServerWithCacheItems(dataItem.jobMap, dataItem.connectionPool, cacheManager, dataItem.cacheItems)
+		server, err := networkHTTPTestServerWithCacheItems(dataItem.jobMap, dataItem.connectionPool, cacheManager, dataItem.cacheItems)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		resp, err := cpuPostCall(server, dataItem.requestPayload, action)
+		resp, err := networkPostCall(server, dataItem.requestPayload, action)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -257,48 +255,49 @@ func assertActionPerformed(t *testing.T, dataItem TestData, action string) {
 	})
 }
 
-func newCPUJob(targets ...string) *config.Job {
+func newNetworkJob(componentName string, targets ...string) *config.Job {
 	return &config.Job{
-		FailureType: config.Service,
-		Target:      targets,
+		ComponentName: componentName,
+		FailureType:   config.Network,
+		Target:        targets,
 	}
 }
 
-func withSuccessCPUConnection() *cConnection {
+func withSuccessNetworkConnection() *nConnection {
 	connection := &network.MockConnection{Status: new(v1.StatusResponse), Err: nil}
-	return &cConnection{
+	return &nConnection{
 		connection: connection,
 	}
 }
 
-func withFailureCPUConnection() *cConnection {
+func withFailureNetworkConnection() *nConnection {
 	statusResponse := new(v1.StatusResponse)
 	statusResponse.Status = v1.StatusResponse_FAIL
 	connection := &network.MockConnection{Status: statusResponse, Err: nil}
-	return &cConnection{
+	return &nConnection{
 		connection: connection,
 	}
 }
 
-func withErrorCPUConnection(errorMessage string) *cConnection {
+func withErrorNetworkConnection(errorMessage string) *nConnection {
 	statusResponse := new(v1.StatusResponse)
 	statusResponse.Status = v1.StatusResponse_FAIL
 	connection := &network.MockConnection{Status: statusResponse, Err: errors.New(errorMessage)}
-	return &cConnection{
+	return &nConnection{
 		connection: connection,
 	}
 }
 
-func withFailureToSetCPUConnection(errorMessage string) *cConnection {
+func withFailureToSetNetworkConnection(errorMessage string) *nConnection {
 	connection := &network.MockFailedConnection{Err: errors.New(errorMessage)}
-	return &cConnection{
+	return &nConnection{
 		connection: connection,
 	}
 }
 
-func cpuHTTPTestServerWithCacheItems(
+func networkHTTPTestServerWithCacheItems(
 	jobMap map[string]*config.Job,
-	connectionPool map[string]*cConnection,
+	connectionPool map[string]*nConnection,
 	cacheManager *cache.Manager,
 	cacheItems map[*cache.Key]func() (*v1.StatusResponse, error),
 ) (*httptest.Server, error) {
@@ -309,7 +308,7 @@ func cpuHTTPTestServerWithCacheItems(
 		}
 	}
 
-	cController := &CController{
+	nController := &NController{
 		jobs:           jobMap,
 		connectionPool: connectionPool,
 		cacheManager:   cacheManager,
@@ -317,16 +316,16 @@ func cpuHTTPTestServerWithCacheItems(
 	}
 
 	router := mux.NewRouter()
-	router.HandleFunc("/cpu", cController.CPUAction).
+	router.HandleFunc("/network", nController.NetworkAction).
 		Queries("action", "{action}").
 		Methods("POST")
 
 	return httptest.NewServer(router), nil
 }
 
-func cpuPostCall(server *httptest.Server, details *RequestPayload, action string) (*response.Payload, error) {
+func networkPostCall(server *httptest.Server, details *RequestPayload, action string) (*response.Payload, error) {
 	requestBody, _ := json.Marshal(details)
-	url := server.URL + "/cpu?action=" + action
+	url := server.URL + "/network?action=" + action
 
 	return post(requestBody, url)
 }

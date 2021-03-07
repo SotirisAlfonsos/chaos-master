@@ -78,8 +78,7 @@ type RequestPayload struct {
 
 func newServiceRequest(details *RequestPayload) *v1.ServiceRequest {
 	return &v1.ServiceRequest{
-		JobName: details.Job,
-		Name:    details.ServiceName,
+		Name: details.ServiceName,
 	}
 }
 
@@ -126,7 +125,7 @@ func (s *SController) ServiceAction(w http.ResponseWriter, r *http.Request) {
 	for _, target := range job.Target {
 		if target == requestPayload.Target && job.ComponentName == requestPayload.ServiceName {
 			serviceRequest := newServiceRequest(requestPayload)
-			s.performAction(action, s.connectionPool[target], serviceRequest, requestPayload.Target, resp)
+			s.performAction(action, s.connectionPool[target], serviceRequest, requestPayload, resp)
 			serviceExists = true
 		}
 	}
@@ -142,15 +141,15 @@ func (s *SController) performAction(
 	action action,
 	sConnection *sConnection,
 	serviceRequest *v1.ServiceRequest,
-	target string,
+	requestPayload *RequestPayload,
 	resp *response.Payload,
 ) {
 	var statusResponse *v1.StatusResponse
 	var err error
 
-	serviceClient, err := sConnection.connection.GetServiceClient(target)
+	serviceClient, err := sConnection.connection.GetServiceClient(requestPayload.Target)
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Can not get service connection from target {%s}", target))
+		err = errors.Wrap(err, fmt.Sprintf("Can not get service connection from target {%s}", requestPayload.Target))
 		resp.InternalServerError(err.Error(), s.logger)
 		return
 	}
@@ -165,7 +164,7 @@ func (s *SController) performAction(
 		return
 	}
 
-	message, err := handleGRPCResponse(statusResponse, err, target)
+	message, err := handleGRPCResponse(statusResponse, err, requestPayload.Target)
 	if err != nil {
 		resp.InternalServerError(err.Error(), s.logger)
 		return
@@ -174,7 +173,12 @@ func (s *SController) performAction(
 	resp.Message = message
 	_ = level.Info(s.logger).Log("msg", resp.Message)
 
-	if err = s.updateCache(serviceRequest, serviceClient, target, action); err != nil {
+	key := &cache.Key{
+		Job:    requestPayload.Job,
+		Target: requestPayload.Target,
+	}
+
+	if err = s.updateCache(serviceRequest, serviceClient, key, action); err != nil {
 		_ = level.Error(s.logger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
 	}
 }
@@ -190,12 +194,7 @@ func handleGRPCResponse(statusResponse *v1.StatusResponse, err error, target str
 	}
 }
 
-func (s *SController) updateCache(serviceRequest *v1.ServiceRequest, serviceClient v1.ServiceClient, target string, action action) error {
-	key := &cache.Key{
-		Job:    serviceRequest.JobName,
-		Target: target,
-	}
-
+func (s *SController) updateCache(serviceRequest *v1.ServiceRequest, serviceClient v1.ServiceClient, key *cache.Key, action action) error {
 	switch action {
 	case start:
 		s.cacheManager.Delete(key)

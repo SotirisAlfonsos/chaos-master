@@ -465,3 +465,125 @@ var Server_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "manager.proto",
 }
+
+// NetworkClient is the client API for Network service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type NetworkClient interface {
+	Start(ctx context.Context, in *NetworkRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	Stop(ctx context.Context, in *NetworkRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+}
+
+type networkClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewNetworkClient(cc grpc.ClientConnInterface) NetworkClient {
+	return &networkClient{cc}
+}
+
+func (c *networkClient) Start(ctx context.Context, in *NetworkRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+	out := new(StatusResponse)
+	err := c.cc.Invoke(ctx, "/v1.Network/Start", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *networkClient) Stop(ctx context.Context, in *NetworkRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+	out := new(StatusResponse)
+	err := c.cc.Invoke(ctx, "/v1.Network/Stop", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// NetworkServer is the server API for Network service.
+// All implementations must embed UnimplementedNetworkServer
+// for forward compatibility
+type NetworkServer interface {
+	Start(context.Context, *NetworkRequest) (*StatusResponse, error)
+	Stop(context.Context, *NetworkRequest) (*StatusResponse, error)
+	mustEmbedUnimplementedNetworkServer()
+}
+
+// UnimplementedNetworkServer must be embedded to have forward compatible implementations.
+type UnimplementedNetworkServer struct {
+}
+
+func (UnimplementedNetworkServer) Start(context.Context, *NetworkRequest) (*StatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
+}
+func (UnimplementedNetworkServer) Stop(context.Context, *NetworkRequest) (*StatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Stop not implemented")
+}
+func (UnimplementedNetworkServer) mustEmbedUnimplementedNetworkServer() {}
+
+// UnsafeNetworkServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to NetworkServer will
+// result in compilation errors.
+type UnsafeNetworkServer interface {
+	mustEmbedUnimplementedNetworkServer()
+}
+
+func RegisterNetworkServer(s grpc.ServiceRegistrar, srv NetworkServer) {
+	s.RegisterService(&Network_ServiceDesc, srv)
+}
+
+func _Network_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NetworkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetworkServer).Start(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/v1.Network/Start",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetworkServer).Start(ctx, req.(*NetworkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Network_Stop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NetworkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetworkServer).Stop(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/v1.Network/Stop",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetworkServer).Stop(ctx, req.(*NetworkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// Network_ServiceDesc is the grpc.ServiceDesc for Network service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Network_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "v1.Network",
+	HandlerType: (*NetworkServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Start",
+			Handler:    _Network_Start_Handler,
+		},
+		{
+			MethodName: "Stop",
+			Handler:    _Network_Stop_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "manager.proto",
+}

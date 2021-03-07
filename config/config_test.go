@@ -25,12 +25,13 @@ func TestShouldUnmarshalSimpleConfig(t *testing.T) {
 	assert.Equal(t, "8090", config.APIOptions.Port, "The correct port should be found from the fine")
 	assert.Equal(t, true, config.HealthCheck.Report, "The health check report option should be found from the file")
 	assert.Equal(t, true, config.HealthCheck.Active, "The health check active option should be found from the file")
-	assert.Equal(t, 5, len(config.JobsFromConfig))
+	assert.Equal(t, 6, len(config.JobsFromConfig))
 	assert.Equal(t, "zookeeper docker", config.JobsFromConfig[0].JobName, "the correct first job name from the file")
 	assert.Equal(t, "zookeeper service", config.JobsFromConfig[1].JobName, "the correct second job name from the file")
 	assert.Equal(t, "zookeeper service", config.JobsFromConfig[2].JobName, "the correct third job name from the file")
 	assert.Equal(t, "cpu injection", config.JobsFromConfig[3].JobName, "the correct fourth job name from the file")
 	assert.Equal(t, "server injection", config.JobsFromConfig[4].JobName, "the correct fifth job name from the file")
+	assert.Equal(t, "network injection", config.JobsFromConfig[5].JobName, "the correct sixth job name from the file")
 	assert.Equal(t, "1234", config.Bots.PeerToken, "the peer token for the communication with the bots")
 }
 
@@ -112,7 +113,7 @@ func TestShouldGetJobMap(t *testing.T) {
 
 	jobMap := config.GetJobMap(logger)
 
-	assert.Equal(t, 4, len(config.JobsFromConfig)-1)
+	assert.Equal(t, 5, len(config.JobsFromConfig)-1)
 	assert.Equal(t, "my_zoo", jobMap["zookeeper docker"].ComponentName)
 	assert.Equal(t, Docker, jobMap["zookeeper docker"].FailureType)
 	assert.Equal(t, 1, len(jobMap["zookeeper docker"].Target))
@@ -121,9 +122,12 @@ func TestShouldGetJobMap(t *testing.T) {
 	assert.Equal(t, 2, len(jobMap["zookeeper service"].Target))
 	assert.Equal(t, "", jobMap["cpu injection"].ComponentName)
 	assert.Equal(t, CPU, jobMap["cpu injection"].FailureType)
+	assert.Equal(t, 1, len(jobMap["cpu injection"].Target))
 	assert.Equal(t, "", jobMap["server injection"].ComponentName)
 	assert.Equal(t, Server, jobMap["server injection"].FailureType)
-	assert.Equal(t, 1, len(jobMap["cpu injection"].Target))
+	assert.Equal(t, 1, len(jobMap["server injection"].Target))
+	assert.Equal(t, Network, jobMap["network injection"].FailureType)
+	assert.Equal(t, 1, len(jobMap["network injection"].Target))
 }
 
 func getLogger() log.Logger {

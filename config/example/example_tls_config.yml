@@ -25,6 +25,9 @@ jobs:
   - job_name: "server_injection"
     type: "Server"
     targets: ['127.0.0.1:8081']
+  - job_name: "network injection"
+    type: "Network"
+    targets: ['127.0.0.1:8081']
 
 bots:
   ca_cert: "config/test/certs/ca-cert.pem"

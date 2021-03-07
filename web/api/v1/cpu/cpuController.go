@@ -115,23 +115,25 @@ func (c *CController) CPUAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetExists := false
-
 	_ = level.Info(c.logger).Log("msg", fmt.Sprintf("%s CPU injection on targets {%s}", action, requestPayload.Target))
 
-	if job, ok := c.jobs[requestPayload.Job]; ok {
-		for _, target := range job.Target {
-			if target == requestPayload.Target {
-				c.performAction(action, c.connectionPool[target], requestPayload, resp)
-				targetExists = true
-			}
-		}
-
-		if !targetExists {
-			resp.BadRequest(fmt.Sprintf("Target {%s} is not registered for job {%s}", requestPayload.Target, requestPayload.Job), c.logger)
-		}
-	} else {
+	job, ok := c.jobs[requestPayload.Job]
+	if !ok {
 		resp.BadRequest(fmt.Sprintf("Could not find job {%s}", requestPayload.Job), c.logger)
+		resp.SetInWriter(w, c.logger)
+		return
+	}
+
+	targetExists := false
+	for _, target := range job.Target {
+		if target == requestPayload.Target {
+			c.performAction(action, c.connectionPool[target], requestPayload, resp)
+			targetExists = true
+		}
+	}
+
+	if !targetExists {
+		resp.BadRequest(fmt.Sprintf("Target {%s} is not registered for job {%s}", requestPayload.Target, requestPayload.Job), c.logger)
 	}
 
 	resp.SetInWriter(w, c.logger)

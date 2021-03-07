@@ -18,6 +18,41 @@ definitions:
       target:
         type: string
     type: object
+  network.RequestPayload:
+    properties:
+      corrupt correlation:
+        type: number
+      corrupt probability:
+        type: number
+      delay correlation:
+        type: number
+      device:
+        type: string
+      duplicate:
+        type: number
+      duplicate correlation:
+        type: number
+      gap:
+        type: integer
+      jitter:
+        type: integer
+      job:
+        type: string
+      latency:
+        type: integer
+      limit:
+        type: integer
+      loss:
+        type: number
+      loss correlation:
+        type: number
+      reorder correlation:
+        type: number
+      reorder probability:
+        type: number
+      target:
+        type: string
+    type: object
   recover.Alert:
     properties:
       labels:
@@ -186,6 +221,42 @@ paths:
       summary: get master status
       tags:
       - Status
+  /network:
+    post:
+      consumes:
+      - application/json
+      description: Start and stop network failures
+      parameters:
+      - description: Specify to perform a start or a stop for a network failure injection
+        in: query
+        name: action
+        required: true
+        type: string
+      - description: Specify the job name, device name, target and netem injection
+          arguments
+        in: body
+        name: requestPayload
+        required: true
+        schema:
+          $ref: '#/definitions/network.RequestPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Payload'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Payload'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Payload'
+      summary: Inject network failures
+      tags:
+      - Failure injections
   /recover/alertmanager:
     post:
       consumes:
