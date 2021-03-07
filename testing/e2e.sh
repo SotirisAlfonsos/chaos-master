@@ -66,9 +66,6 @@ printf %"s\n" "------------ Init start service and container ------------"
 out=$(startService "zookeeper service" "simple" "127.0.0.1:8081" '"status":200')
 verifyOK $out
 
-out=$(startService "zookeeper service" "simple" "127.0.0.1:8081" '"status":500')
-verifyOK $out
-
 out=$(startDocker "zookeeper docker" "zookeeper" "127.0.0.1:8081" '"status":200')
 verifyOK $out
 
