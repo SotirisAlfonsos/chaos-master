@@ -30,7 +30,7 @@ api_options:
   scheme: http
 
 # Contain the definition of all enabled failures. 
-# Each possible failure injection needs to be defined in a job together with the targets that are in scope
+# Each failure injection needs to be defined in a job together with the targets that are in scope
 jobs:
     # The unique name of the job. The character ',' is not allowed
   - job_name: "docker failure injection"
