@@ -35,5 +35,5 @@ bots:
   peer_token: 30028dd6-a641-4ac3-91d8-1e214ac5e6f6
 
 health_check:
-  active: false
-  report: false
+  active: true
+  report: true

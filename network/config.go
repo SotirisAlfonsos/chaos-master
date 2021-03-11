@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
-	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
-	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/go-kit/kit/log"
+
+	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
+	"github.com/SotirisAlfonsos/chaos-master/config"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
@@ -17,10 +17,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
-)
-
-var (
-	logger = createLogger("info")
 )
 
 type Connections struct {
@@ -39,6 +35,7 @@ type Connection interface {
 type connection struct {
 	clientConnection *grpc.ClientConn
 	options          *Options
+	logger           log.Logger
 }
 
 type Options struct {
@@ -69,7 +66,7 @@ func GetConnectionPool(config *config.Config, logger log.Logger) *Connections {
 
 func (connections *Connections) addForTargets(targets []string, options *Options, logger log.Logger) {
 	for _, target := range targets {
-		connection := &connection{options: options}
+		connection := &connection{options: options, logger: logger}
 		if err := connection.addToPool(connections, target); err != nil {
 			_ = level.Error(logger).Log("msg", fmt.Sprintf("failed to add connection to target %s, to connection pool", target), "err", err)
 		}
@@ -105,7 +102,7 @@ func (connection *connection) updateClientConnection(target string) error {
 		return err
 	}
 
-	_ = level.Info(logger).Log("msg", fmt.Sprintf("Dial %s ...", target))
+	_ = level.Info(connection.logger).Log("msg", fmt.Sprintf("Dial %s ...", target))
 	clientConn, err := grpc.Dial(target, opts...)
 	if err != nil {
 		return err
@@ -212,13 +209,4 @@ func (connection *connection) GetHealthClient(target string) (v1.HealthClient, e
 		return nil, err
 	}
 	return v1.NewHealthClient(connection.clientConnection), nil
-}
-
-func createLogger(debugLevel string) log.Logger {
-	allowLevel := &chaoslogger.AllowedLevel{}
-	if err := allowLevel.Set(debugLevel); err != nil {
-		fmt.Printf("%v", err)
-	}
-
-	return chaoslogger.New(allowLevel)
 }

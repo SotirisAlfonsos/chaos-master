@@ -1,11 +1,16 @@
 package network
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/config"
+	"github.com/go-kit/kit/log"
 	"github.com/stretchr/testify/assert"
 )
+
+var logger = createLogger("info")
 
 type TestData struct {
 	message    string
@@ -193,4 +198,13 @@ func TestRedialFailureWithTls(t *testing.T) {
 			}
 		})
 	}
+}
+
+func createLogger(debugLevel string) log.Logger {
+	allowLevel := &chaoslogger.AllowedLevel{}
+	if err := allowLevel.Set(debugLevel); err != nil {
+		fmt.Printf("%v", err)
+	}
+
+	return chaoslogger.New(allowLevel)
 }

@@ -30,10 +30,18 @@ func (restAPI *RestAPI) RunAPIController() {
 	_ = level.Info(restAPI.Logger).Log("msg", "starting web server on port "+restAPI.Port)
 
 	c := make(chan os.Signal, 1)
+	e := make(chan error)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		<-c
+		e <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-e:
+		_ = level.Error(restAPI.Logger).Log("msg", "server error", "err", err)
+		os.Exit(1)
+	case <-c:
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		_ = level.Info(restAPI.Logger).Log("msg", "Gracefully shutting down server")
 
@@ -43,10 +51,6 @@ func (restAPI *RestAPI) RunAPIController() {
 		}
 		cancel()
 		os.Exit(0)
-	}()
-
-	if err := server.ListenAndServe(); err != nil {
-		_ = level.Error(restAPI.Logger).Log("msg", "Can not start web server", "err", err)
 	}
 }
 

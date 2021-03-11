@@ -6,5 +6,5 @@ go:
 go_import_path: chaos-master
 
 script:
-  - go test ./... -v -short -coverprofile=coverage.txt -covermode=atomic
+  - go test ./... -v -coverprofile=coverage.txt -covermode=atomic
   - bash <(curl -s https://codecov.io/bash)
