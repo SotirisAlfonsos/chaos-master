@@ -17,8 +17,49 @@ More info on https://principlesofchaos.org/
 
 The master and bots focus on points <b>3</b> and <b>5</b>
 
+### API
+See the api specification after starting the master at `\<host\>/chaos/api/v1/swagger/index.html`
+
 ## Starting Up
 Start the chaos master providing a <i>config.file</i> that contains the job definitions. See an example of the file in the <i>config/example</i> folder.
+```yml
+# Contain the configuration for the port and scheme of the api. 
+# The deafault values are port: 8080 and scheme: http
+api_options:
+  port: 8090
+  scheme: http
 
-### API
-See the api specification after starting the master at <i>\<host\>/chaos/api/v1/swagger/index.html</i>
+# Contain the definition of all enabled failures. 
+# Each possible failure injection needs to be defined in a job together with the targets that are in scope
+jobs:
+    # The unique name of the job. The character ',' is not allowed
+  - job_name: "docker failure injection"
+    # The type of the failure. Can be [Docker, Service, CPU, Server, Network]
+    type: "Docker"
+    # The name of the target. Only applicable to Docker and Service failure types
+    component_name: "zookeeper"
+    # The list of targets for which is this failure can be applied
+    targets: ['127.0.0.1:8083', '127.0.0.1:8081']
+  - job_name: "network injection"
+    type: "Network"
+    targets: ['127.0.0.1:8081']
+
+# Contains the tls configuration for the communication with the bots. 
+# If not specified will default to http
+# If specified the traffic to the bots will be https
+# You can only provide a peer token if the traffic is https
+bots:
+  # CA certificate
+  ca_cert: "config/test/certs/ca-cert.pem"
+  # The pub cert for the connection with the bot
+  public_cert: "config/test/certs/server-cert.pem"
+  # peer token for authorization with the bot. A public cert needs to also be provided
+  peer_token: 30028dd6-a641-4ac3-91d8-1e214ac5e6f6
+
+# Contains the configuration for the healthcheck towards the bots
+health_check:
+  # If set to active the master with send a healthcheck request to the bots every 1 minute
+  active: false
+  # If set to active the status of the healthcheck will be reported in application log (stderr)
+  report: false
+```
