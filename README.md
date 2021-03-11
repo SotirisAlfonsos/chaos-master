@@ -36,8 +36,8 @@ jobs:
   - job_name: "docker failure injection"
     # The type of the failure. Can be [Docker, Service, CPU, Server, Network]
     type: "Docker"
-    # The name of the target. Only applicable to Docker and Service failure types
-    component_name: "zookeeper"
+    # The name of the target component. Only applicable to Docker and Service failure types
+    component_name: "nginx"
     # The list of targets for which is this failure can be applied
     targets: ['127.0.0.1:8083', '127.0.0.1:8081']
   - job_name: "network injection"
