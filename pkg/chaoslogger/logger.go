@@ -1,13 +1,18 @@
 package chaoslogger
 
 import (
-	"os"
+	"io"
 	"time"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 )
+
+type Loggers struct {
+	OutLogger log.Logger
+	ErrLogger log.Logger
+}
 
 // AllowedLevel is a settable identifier for the minimum level a log entry
 // must be have.
@@ -38,8 +43,8 @@ func (l *AllowedLevel) Set(s string) error {
 
 // New returns a new leveled oklog logger. Each logged line will be annotated
 // with a timestamp. The output always goes to stderr.
-func New(allowedLevel *AllowedLevel) log.Logger {
-	l := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
+func New(allowedLevel *AllowedLevel, writer io.Writer) log.Logger {
+	l := log.NewLogfmtLogger(log.NewSyncWriter(writer))
 
 	l = level.NewFilter(l, allowedLevel.o)
 	l = log.With(l, "ts", timestampFormat(), "caller", log.DefaultCaller)

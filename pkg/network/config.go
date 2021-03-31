@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/go-kit/kit/log"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/chaoslogger"
 
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/config"
@@ -24,18 +24,19 @@ type Connections struct {
 }
 
 type Connection interface {
-	GetServiceClient(target string) (v1.ServiceClient, error)
-	GetDockerClient(target string) (v1.DockerClient, error)
-	GetCPUClient(target string) (v1.CPUClient, error)
-	GetServerClient(target string) (v1.ServerClient, error)
-	GetNetworkClient(target string) (v1.NetworkClient, error)
-	GetHealthClient(target string) (v1.HealthClient, error)
+	GetServiceClient() (v1.ServiceClient, error)
+	GetDockerClient() (v1.DockerClient, error)
+	GetCPUClient() (v1.CPUClient, error)
+	GetServerClient() (v1.ServerClient, error)
+	GetNetworkClient() (v1.NetworkClient, error)
+	GetHealthClient() (v1.HealthClient, error)
 }
 
 type connection struct {
+	target           string
 	clientConnection *grpc.ClientConn
 	options          *Options
-	logger           log.Logger
+	loggers          chaoslogger.Loggers
 }
 
 type Options struct {
@@ -44,7 +45,7 @@ type Options struct {
 	peerToken  string
 }
 
-func GetConnectionPool(config *config.Config, logger log.Logger) *Connections {
+func GetConnectionPool(config *config.Config, loggers chaoslogger.Loggers) *Connections {
 	connections := &Connections{
 		Pool: make(map[string]Connection),
 	}
@@ -58,17 +59,17 @@ func GetConnectionPool(config *config.Config, logger log.Logger) *Connections {
 	}
 
 	for _, jobFromConfig := range config.JobsFromConfig {
-		connections.addForTargets(jobFromConfig.Targets, options, logger)
+		connections.addForTargets(jobFromConfig.Targets, options, loggers)
 	}
 
 	return connections
 }
 
-func (connections *Connections) addForTargets(targets []string, options *Options, logger log.Logger) {
+func (connections *Connections) addForTargets(targets []string, options *Options, loggers chaoslogger.Loggers) {
 	for _, target := range targets {
-		connection := &connection{options: options, logger: logger}
+		connection := &connection{target: target, options: options, loggers: loggers}
 		if err := connection.addToPool(connections, target); err != nil {
-			_ = level.Error(logger).Log("msg", fmt.Sprintf("failed to add connection to target %s, to connection pool", target), "err", err)
+			_ = level.Error(loggers.ErrLogger).Log("msg", fmt.Sprintf("failed to add connection to target %s, to connection pool", target), "err", err)
 		}
 	}
 }
@@ -76,7 +77,7 @@ func (connections *Connections) addForTargets(targets []string, options *Options
 func (connection *connection) addToPool(connections *Connections, target string) error {
 	if _, ok := connections.Pool[target]; !ok {
 		connections.Pool[target] = connection
-		err := connection.updateClientConnection(target)
+		err := connection.dial()
 		if err != nil {
 			return err
 		}
@@ -84,11 +85,11 @@ func (connection *connection) addToPool(connections *Connections, target string)
 	return nil
 }
 
-func (connection *connection) redialForTarget(target string) error {
+func (connection *connection) dial() error {
 	if connection.clientConnection == nil ||
 		(connection.clientConnection.GetState() != connectivity.Ready &&
 			connection.clientConnection.GetState() != connectivity.Connecting) {
-		err := connection.updateClientConnection(target)
+		err := connection.updateClientConnection()
 		if err != nil {
 			return errors.Wrap(err, "could not establish client connection")
 		}
@@ -96,14 +97,14 @@ func (connection *connection) redialForTarget(target string) error {
 	return nil
 }
 
-func (connection *connection) updateClientConnection(target string) error {
+func (connection *connection) updateClientConnection() error {
 	opts, err := connection.options.getGRPCOptions()
 	if err != nil {
 		return err
 	}
 
-	_ = level.Info(connection.logger).Log("msg", fmt.Sprintf("Dial %s ...", target))
-	clientConn, err := grpc.Dial(target, opts...)
+	_ = level.Info(connection.loggers.OutLogger).Log("msg", fmt.Sprintf("Dial %s ...", connection.target))
+	clientConn, err := grpc.Dial(connection.target, opts...)
 	if err != nil {
 		return err
 	}
@@ -163,48 +164,48 @@ func loadTLSCredentials(cert string) (credentials.TransportCredentials, error) {
 	return credentials.NewTLS(tlsConfig), nil
 }
 
-func (connection *connection) GetServiceClient(target string) (v1.ServiceClient, error) {
-	err := connection.redialForTarget(target)
+func (connection *connection) GetServiceClient() (v1.ServiceClient, error) {
+	err := connection.dial()
 	if err != nil {
 		return nil, err
 	}
 	return v1.NewServiceClient(connection.clientConnection), nil
 }
 
-func (connection *connection) GetDockerClient(target string) (v1.DockerClient, error) {
-	err := connection.redialForTarget(target)
+func (connection *connection) GetDockerClient() (v1.DockerClient, error) {
+	err := connection.dial()
 	if err != nil {
 		return nil, err
 	}
 	return v1.NewDockerClient(connection.clientConnection), nil
 }
 
-func (connection *connection) GetCPUClient(target string) (v1.CPUClient, error) {
-	err := connection.redialForTarget(target)
+func (connection *connection) GetCPUClient() (v1.CPUClient, error) {
+	err := connection.dial()
 	if err != nil {
 		return nil, err
 	}
 	return v1.NewCPUClient(connection.clientConnection), nil
 }
 
-func (connection *connection) GetServerClient(target string) (v1.ServerClient, error) {
-	err := connection.redialForTarget(target)
+func (connection *connection) GetServerClient() (v1.ServerClient, error) {
+	err := connection.dial()
 	if err != nil {
 		return nil, err
 	}
 	return v1.NewServerClient(connection.clientConnection), nil
 }
 
-func (connection *connection) GetNetworkClient(target string) (v1.NetworkClient, error) {
-	err := connection.redialForTarget(target)
+func (connection *connection) GetNetworkClient() (v1.NetworkClient, error) {
+	err := connection.dial()
 	if err != nil {
 		return nil, err
 	}
 	return v1.NewNetworkClient(connection.clientConnection), nil
 }
 
-func (connection *connection) GetHealthClient(target string) (v1.HealthClient, error) {
-	err := connection.redialForTarget(target)
+func (connection *connection) GetHealthClient() (v1.HealthClient, error) {
+	err := connection.dial()
 	if err != nil {
 		return nil, err
 	}

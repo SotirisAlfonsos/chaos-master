@@ -5,7 +5,8 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/go-kit/kit/log"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/chaoslogger"
+
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
@@ -128,21 +129,21 @@ type Job struct {
 	Target        []string
 }
 
-func (config *Config) GetJobMap(logger log.Logger) map[string]*Job {
+func (config *Config) GetJobMap(loggers chaoslogger.Loggers) map[string]*Job {
 	jobs := make(map[string]*Job)
 
 	for _, configJobs := range config.JobsFromConfig {
-		configJobs.addToJobsMap(jobs, logger)
+		configJobs.addToJobsMap(jobs, loggers)
 	}
 
-	showRegisteredJobs(jobs, logger)
+	showRegisteredJobs(jobs, loggers)
 
 	return jobs
 }
 
-func (cj *JobsFromConfig) addToJobsMap(jobs map[string]*Job, logger log.Logger) {
+func (cj *JobsFromConfig) addToJobsMap(jobs map[string]*Job, loggers chaoslogger.Loggers) {
 	if _, ok := jobs[cj.JobName]; ok {
-		_ = level.Error(logger).Log("msg", fmt.Sprintf("The job name %s is not unique", cj.JobName))
+		_ = level.Error(loggers.ErrLogger).Log("msg", fmt.Sprintf("The job name %s is not unique", cj.JobName))
 	} else {
 		jobs[cj.JobName] = &Job{
 			ComponentName: cj.ComponentName,
@@ -152,13 +153,13 @@ func (cj *JobsFromConfig) addToJobsMap(jobs map[string]*Job, logger log.Logger) 
 	}
 }
 
-func showRegisteredJobs(jobsMap map[string]*Job, logger log.Logger) {
+func showRegisteredJobs(jobsMap map[string]*Job, loggers chaoslogger.Loggers) {
 	for jobName, job := range jobsMap {
 		if job.ComponentName != "" {
-			_ = level.Info(logger).Log("msg", fmt.Sprintf("{%s} job registered for component {%s} type {%s} and targets %v",
+			_ = level.Info(loggers.OutLogger).Log("msg", fmt.Sprintf("{%s} job registered for component {%s} type {%s} and targets %v",
 				jobName, job.ComponentName, job.FailureType, job.Target))
 		} else {
-			_ = level.Info(logger).Log("msg", fmt.Sprintf("{%s} job registered for type {%s} and targets %v",
+			_ = level.Info(loggers.OutLogger).Log("msg", fmt.Sprintf("{%s} job registered for type {%s} and targets %v",
 				jobName, job.FailureType, job.Target))
 		}
 	}

@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
-
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
-	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/config"
-	"github.com/SotirisAlfonsos/chaos-master/network"
-	"github.com/go-kit/kit/log"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/cache"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/chaoslogger"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/network"
+	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
+	"github.com/SotirisAlfonsos/gocache"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 )
@@ -21,8 +21,8 @@ import (
 type CController struct {
 	jobs           map[string]*config.Job
 	connectionPool map[string]*cConnection
-	cacheManager   *cache.Manager
-	logger         log.Logger
+	cache          *gocache.Cache
+	loggers        chaoslogger.Loggers
 }
 
 type cConnection struct {
@@ -54,8 +54,8 @@ func toActionEnum(value string) (action, error) {
 func NewCPUController(
 	jobs map[string]*config.Job,
 	connections *network.Connections,
-	cache *cache.Manager,
-	logger log.Logger,
+	cache *gocache.Cache,
+	loggers chaoslogger.Loggers,
 ) *CController {
 	connPool := make(map[string]*cConnection)
 	for target, connection := range connections.Pool {
@@ -66,8 +66,8 @@ func NewCPUController(
 	return &CController{
 		jobs:           jobs,
 		connectionPool: connPool,
-		cacheManager:   cache,
-		logger:         logger,
+		cache:          cache,
+		loggers:        loggers,
 	}
 }
 
@@ -98,90 +98,101 @@ func newCPURequest(details *RequestPayload) *v1.CPURequest {
 // @Failure 500 {object} response.Payload
 // @Router /cpu [post]
 func (c *CController) CPUAction(w http.ResponseWriter, r *http.Request) {
-	resp := response.NewDefaultResponse()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	requestPayload := &RequestPayload{}
 	err := json.NewDecoder(r.Body).Decode(&requestPayload)
 	if err != nil {
-		resp.BadRequest("Could not decode request body", c.logger)
-		resp.SetInWriter(w, c.logger)
+		response.BadRequest(w, "Could not decode request body", c.loggers)
 		return
 	}
 
 	action, err := toActionEnum(r.FormValue("action"))
 	if err != nil {
-		resp.BadRequest(err.Error(), c.logger)
-		resp.SetInWriter(w, c.logger)
+		response.BadRequest(w, err.Error(), c.loggers)
 		return
 	}
 
-	_ = level.Info(c.logger).Log("msg", fmt.Sprintf("%s CPU injection on targets {%s}", action, requestPayload.Target))
+	err = checkIfTargetExists(c.jobs, requestPayload)
+	if err != nil {
+		response.BadRequest(w, err.Error(), c.loggers)
+		return
+	}
 
-	job, ok := c.jobs[requestPayload.Job]
+	_ = level.Info(c.loggers.OutLogger).Log("msg", fmt.Sprintf("%s CPU injection on targets {%s}", action, requestPayload.Target))
+
+	message, err := c.performAction(ctx, action, requestPayload)
+	if err != nil {
+		response.InternalServerError(w, err.Error(), c.loggers)
+		return
+	}
+
+	_ = level.Info(c.loggers.OutLogger).Log("msg", message)
+
+	response.OkResponse(w, message, c.loggers)
+}
+
+func checkIfTargetExists(jobMap map[string]*config.Job, requestPayload *RequestPayload) error {
+	job, ok := jobMap[requestPayload.Job]
 	if !ok {
-		resp.BadRequest(fmt.Sprintf("Could not find job {%s}", requestPayload.Job), c.logger)
-		resp.SetInWriter(w, c.logger)
-		return
+		return errors.New(fmt.Sprintf("Could not find job {%s}", requestPayload.Job))
 	}
 
-	targetExists := false
+	ok = checkIfTargetExistsForJob(job, requestPayload.Target)
+	if !ok {
+		return errors.New(fmt.Sprintf("Target {%s} is not registered for job {%s}", requestPayload.Target, requestPayload.Job))
+	}
+
+	return nil
+}
+
+func checkIfTargetExistsForJob(job *config.Job, requestTarget string) bool {
 	for _, target := range job.Target {
-		if target == requestPayload.Target {
-			c.performAction(action, c.connectionPool[target], requestPayload, resp)
-			targetExists = true
+		if target == requestTarget {
+			return true
 		}
 	}
 
-	if !targetExists {
-		resp.BadRequest(fmt.Sprintf("Target {%s} is not registered for job {%s}", requestPayload.Target, requestPayload.Job), c.logger)
-	}
-
-	resp.SetInWriter(w, c.logger)
+	return false
 }
 
 func (c *CController) performAction(
+	ctx context.Context,
 	action action,
-	cConnection *cConnection,
 	request *RequestPayload,
-	resp *response.Payload,
-) {
+) (string, error) {
 	var statusResponse *v1.StatusResponse
 	var err error
 
-	cpuClient, err := cConnection.connection.GetCPUClient(request.Target)
+	cpuClient, err := c.connectionPool[request.Target].connection.GetCPUClient()
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Can not get cpu connection for target {%s}", request.Target))
-		resp.InternalServerError(err.Error(), c.logger)
-		return
+		return "", errors.Wrap(err, fmt.Sprintf("Can not get cpu connection for target {%s}", request.Target))
 	}
 
 	switch action {
 	case start:
-		statusResponse, err = cpuClient.Start(context.Background(), newCPURequest(request))
+		statusResponse, err = cpuClient.Start(ctx, newCPURequest(request))
 	case stop:
-		statusResponse, err = cpuClient.Stop(context.Background(), newCPURequest(request))
-	default:
-		resp.BadRequest(fmt.Sprintf("Action {%s} not allowed", action), c.logger)
-		return
+		statusResponse, err = cpuClient.Stop(ctx, newCPURequest(request))
 	}
 
 	switch {
 	case err != nil:
-		err = errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", request.Target))
-		resp.InternalServerError(err.Error(), c.logger)
+		return "", errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", request.Target))
 	case statusResponse.Status != v1.StatusResponse_SUCCESS:
-		resp.InternalServerError(fmt.Sprintf("Failure response from target {%s}", request.Target), c.logger)
+		return "", errors.New(fmt.Sprintf("Failure response from target {%s}", request.Target))
 	default:
-		resp.Message = fmt.Sprintf("Response from target {%s}, {%s}, {%s}", request.Target, statusResponse.Message, statusResponse.Status)
-		_ = level.Info(c.logger).Log("msg", resp.Message)
 		if err = c.updateCache(cpuClient, request, action); err != nil {
-			_ = level.Error(c.logger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
+			_ = level.Error(c.loggers.ErrLogger).Log("msg", fmt.Sprintf("Could not update cache for operation cpu injection %s", action), "err", err)
 		}
 	}
+
+	return fmt.Sprintf("Response from target {%s}, {%s}, {%s}", request.Target, statusResponse.Message, statusResponse.Status), nil
 }
 
 func (c *CController) updateCache(cpuClient v1.CPUClient, request *RequestPayload, action action) error {
-	key := &cache.Key{
+	key := cache.Key{
 		Job:    request.Job,
 		Target: request.Target,
 	}
@@ -191,9 +202,10 @@ func (c *CController) updateCache(cpuClient v1.CPUClient, request *RequestPayloa
 		recoveryFunc := func() (*v1.StatusResponse, error) {
 			return cpuClient.Stop(context.Background(), newCPURequest(request))
 		}
-		return c.cacheManager.Register(key, recoveryFunc)
+		c.cache.Set(key, recoveryFunc)
+		return nil
 	case stop:
-		c.cacheManager.Delete(key)
+		c.cache.Delete(key)
 		return nil
 	default:
 		return errors.New(fmt.Sprintf("Action %s not supported for cache operation", action))

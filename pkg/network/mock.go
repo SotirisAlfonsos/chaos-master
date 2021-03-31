@@ -12,27 +12,27 @@ type MockConnection struct {
 	Err    error
 }
 
-func (connection *MockConnection) GetServiceClient(string) (v1.ServiceClient, error) {
+func (connection *MockConnection) GetServiceClient() (v1.ServiceClient, error) {
 	return GetMockServiceClient(connection.Status, connection.Err), nil
 }
 
-func (connection *MockConnection) GetDockerClient(string) (v1.DockerClient, error) {
+func (connection *MockConnection) GetDockerClient() (v1.DockerClient, error) {
 	return GetMockDockerClient(connection.Status, connection.Err), nil
 }
 
-func (connection *MockConnection) GetCPUClient(string) (v1.CPUClient, error) {
+func (connection *MockConnection) GetCPUClient() (v1.CPUClient, error) {
 	return GetMockCPUClient(connection.Status, connection.Err), nil
 }
 
-func (connection *MockConnection) GetServerClient(string) (v1.ServerClient, error) {
+func (connection *MockConnection) GetServerClient() (v1.ServerClient, error) {
 	return GetMockServerClient(connection.Status, connection.Err), nil
 }
 
-func (connection *MockConnection) GetNetworkClient(string) (v1.NetworkClient, error) {
+func (connection *MockConnection) GetNetworkClient() (v1.NetworkClient, error) {
 	return GetMockNetworkClient(connection.Status, connection.Err), nil
 }
 
-func (connection *MockConnection) GetHealthClient(string) (v1.HealthClient, error) {
+func (connection *MockConnection) GetHealthClient() (v1.HealthClient, error) {
 	return nil, nil
 }
 
@@ -40,26 +40,26 @@ type MockFailedConnection struct {
 	Err error
 }
 
-func (failedConnection *MockFailedConnection) GetServiceClient(string) (v1.ServiceClient, error) {
+func (failedConnection *MockFailedConnection) GetServiceClient() (v1.ServiceClient, error) {
 	return nil, failedConnection.Err
 }
 
-func (failedConnection *MockFailedConnection) GetDockerClient(string) (v1.DockerClient, error) {
+func (failedConnection *MockFailedConnection) GetDockerClient() (v1.DockerClient, error) {
 	return nil, failedConnection.Err
 }
 
-func (failedConnection *MockFailedConnection) GetCPUClient(string) (v1.CPUClient, error) {
+func (failedConnection *MockFailedConnection) GetCPUClient() (v1.CPUClient, error) {
 	return nil, failedConnection.Err
 }
 
-func (failedConnection *MockFailedConnection) GetServerClient(string) (v1.ServerClient, error) {
+func (failedConnection *MockFailedConnection) GetServerClient() (v1.ServerClient, error) {
 	return nil, failedConnection.Err
 }
 
-func (failedConnection *MockFailedConnection) GetNetworkClient(string) (v1.NetworkClient, error) {
+func (failedConnection *MockFailedConnection) GetNetworkClient() (v1.NetworkClient, error) {
 	return nil, failedConnection.Err
 }
-func (failedConnection *MockFailedConnection) GetHealthClient(string) (v1.HealthClient, error) {
+func (failedConnection *MockFailedConnection) GetHealthClient() (v1.HealthClient, error) {
 	return nil, failedConnection.Err
 }
 

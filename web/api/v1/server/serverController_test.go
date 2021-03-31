@@ -5,26 +5,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/SotirisAlfonsos/chaos-master/network"
-
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
-	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
-	"github.com/go-kit/kit/log"
-
-	"github.com/gorilla/mux"
-
 	"github.com/SotirisAlfonsos/chaos-master/config"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/chaoslogger"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/network"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
+	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
-	logger = getLogger()
+	loggers = getLoggers()
 )
 
 type testData struct {
@@ -36,7 +33,13 @@ type testData struct {
 }
 
 type expectedResult struct {
-	payload *response.Payload
+	response *responseWrapper
+}
+
+type responseWrapper struct {
+	status  int
+	message string
+	err     error
 }
 
 func TestSuccessServerStop(t *testing.T) {
@@ -50,7 +53,7 @@ func TestSuccessServerStop(t *testing.T) {
 				"127.0.0.1": withSuccessServerConnection(),
 			},
 			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
-			expected:       &expectedResult{payload: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
+			expected:       &expectedResult{response: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 	}
 
@@ -70,7 +73,7 @@ func TestServerInvalidInputTargetAndJob(t *testing.T) {
 				"127.0.0.1": withSuccessServerConnection(),
 			},
 			requestPayload: &RequestPayload{Job: "job name not existing", Target: "127.0.0.1"},
-			expected:       &expectedResult{payload: badRequestResponse("Could not find job {job name not existing}")},
+			expected:       &expectedResult{response: badRequestResponse("Could not find job {job name not existing}")},
 		},
 		{
 			message: "Bad request for target not provided in request",
@@ -81,7 +84,7 @@ func TestServerInvalidInputTargetAndJob(t *testing.T) {
 				"127.0.0.1": withSuccessServerConnection(),
 			},
 			requestPayload: &RequestPayload{Job: "job name"},
-			expected:       &expectedResult{payload: badRequestResponse("Target {} is not registered for job {job name}")},
+			expected:       &expectedResult{response: badRequestResponse("Target {} is not registered for job {job name}")},
 		},
 		{
 			message: "Bad request for job not provided in request",
@@ -92,7 +95,7 @@ func TestServerInvalidInputTargetAndJob(t *testing.T) {
 				"127.0.0.1": withSuccessServerConnection(),
 			},
 			requestPayload: &RequestPayload{Target: "127.0.0.1"},
-			expected:       &expectedResult{payload: badRequestResponse("Could not find job {}")},
+			expected:       &expectedResult{response: badRequestResponse("Could not find job {}")},
 		},
 		{
 			message: "Bad request for target not in job",
@@ -104,7 +107,7 @@ func TestServerInvalidInputTargetAndJob(t *testing.T) {
 				"127.0.0.3": withSuccessServerConnection(),
 			},
 			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.3"},
-			expected:       &expectedResult{payload: badRequestResponse("Target {127.0.0.3} is not registered for job {job name}")},
+			expected:       &expectedResult{response: badRequestResponse("Target {127.0.0.3} is not registered for job {job name}")},
 		},
 	}
 
@@ -124,7 +127,7 @@ func TestServerInvalidAction(t *testing.T) {
 				"127.0.0.1": withSuccessServerConnection(),
 			},
 			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
-			expected:       &expectedResult{payload: badRequestResponse("The action {start} is not supported")},
+			expected:       &expectedResult{response: badRequestResponse("The action {start} is not supported")},
 		},
 	}
 
@@ -144,7 +147,7 @@ func TestServerInvalidResponseFromBot(t *testing.T) {
 				"127.0.0.1": withFailureServerConnection(),
 			},
 			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
-			expected:       &expectedResult{payload: internalServerErrorResponse("Failure response from target {127.0.0.1}")},
+			expected:       &expectedResult{response: internalServerErrorResponse("Failure response from target {127.0.0.1}")},
 		},
 		{
 			message: "Internal server error for failure to connect to bot",
@@ -155,7 +158,7 @@ func TestServerInvalidResponseFromBot(t *testing.T) {
 				"127.0.0.1": withErrorServerConnection("can not connect"),
 			},
 			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
-			expected:       &expectedResult{payload: internalServerErrorResponse("Error response from target {127.0.0.1}: can not connect")},
+			expected:       &expectedResult{response: internalServerErrorResponse("Error response from target {127.0.0.1}: can not connect")},
 		},
 		{
 			message: "Internal server error for failure to establish connection with bot",
@@ -166,7 +169,7 @@ func TestServerInvalidResponseFromBot(t *testing.T) {
 				"127.0.0.1": withFailureToSetServerConnection("can not set connection"),
 			},
 			requestPayload: &RequestPayload{Job: "job name", Target: "127.0.0.1"},
-			expected:       &expectedResult{payload: internalServerErrorResponse("Can not get server connection from target {127.0.0.1}: can not set connection")},
+			expected:       &expectedResult{response: internalServerErrorResponse("Can not get server connection from target {127.0.0.1}: can not set connection")},
 		},
 	}
 
@@ -189,14 +192,13 @@ func assertActionPerformed(t *testing.T, dataItem testData, action string) {
 			t.Fatal(err)
 		}
 
-		resp, err := serverPostCall(server, dataItem.requestPayload, action)
+		status, message, err := serverPostCall(server, dataItem.requestPayload, action)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		assert.Equal(t, dataItem.expected.payload.Status, resp.Status)
-		assert.Equal(t, dataItem.expected.payload.Message, resp.Message)
-		assert.Equal(t, dataItem.expected.payload.Error, resp.Error)
+		assert.Equal(t, dataItem.expected.response.status, status)
+		assert.Equal(t, dataItem.expected.response.message, message)
 
 		server.Close()
 	})
@@ -209,7 +211,7 @@ func serverHTTPTestServer(
 	sController := &SController{
 		jobs:           jobMap,
 		connectionPool: connectionPool,
-		logger:         logger,
+		loggers:        loggers,
 	}
 
 	router := mux.NewRouter()
@@ -220,26 +222,31 @@ func serverHTTPTestServer(
 	return httptest.NewServer(router), nil
 }
 
-func serverPostCall(server *httptest.Server, details *RequestPayload, action string) (*response.Payload, error) {
+func serverPostCall(server *httptest.Server, details *RequestPayload, action string) (int, string, error) {
 	requestBody, _ := json.Marshal(details)
 	url := server.URL + "/server?action=" + action
 
 	return post(requestBody, url)
 }
 
-func post(requestBody []byte, url string) (*response.Payload, error) {
+func post(requestBody []byte, url string) (int, string, error) {
 	resp, err := http.Post(url, "", bytes.NewReader(requestBody)) //nolint:gosec
 	if err != nil {
-		return nil, err
+		return 0, "", err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		b, _ := ioutil.ReadAll(resp.Body)
+		return resp.StatusCode, string(b), nil
+	}
 
 	respPayload := &response.Payload{}
 	err = json.NewDecoder(resp.Body).Decode(&respPayload)
 	if err != nil {
-		return &response.Payload{Status: resp.StatusCode}, err
+		return resp.StatusCode, "", err
 	}
-	return respPayload, nil
+	return respPayload.Status, respPayload.Message, nil
 }
 
 func withSuccessServerConnection() *sConnection {
@@ -274,32 +281,35 @@ func withFailureToSetServerConnection(errorMessage string) *sConnection {
 	}
 }
 
-func okResponse(message string) *response.Payload {
-	return &response.Payload{
-		Message: message,
-		Status:  200,
+func okResponse(message string) *responseWrapper {
+	return &responseWrapper{
+		message: message,
+		status:  200,
 	}
 }
 
-func badRequestResponse(error string) *response.Payload {
-	return &response.Payload{
-		Error:  error,
-		Status: 400,
+func badRequestResponse(error string) *responseWrapper {
+	return &responseWrapper{
+		message: error + "\n",
+		status:  400,
 	}
 }
 
-func internalServerErrorResponse(error string) *response.Payload {
-	return &response.Payload{
-		Error:  error,
-		Status: 500,
+func internalServerErrorResponse(error string) *responseWrapper {
+	return &responseWrapper{
+		message: error + "\n",
+		status:  500,
 	}
 }
 
-func getLogger() log.Logger {
+func getLoggers() chaoslogger.Loggers {
 	allowLevel := &chaoslogger.AllowedLevel{}
 	if err := allowLevel.Set("debug"); err != nil {
 		fmt.Printf("%v", err)
 	}
 
-	return chaoslogger.New(allowLevel)
+	return chaoslogger.Loggers{
+		OutLogger: chaoslogger.New(allowLevel, os.Stdout),
+		ErrLogger: chaoslogger.New(allowLevel, os.Stderr),
+	}
 }

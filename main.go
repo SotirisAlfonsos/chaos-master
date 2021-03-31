@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/config"
 	_ "github.com/SotirisAlfonsos/chaos-master/docs"
 	"github.com/SotirisAlfonsos/chaos-master/healthcheck"
-	"github.com/SotirisAlfonsos/chaos-master/network"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/chaoslogger"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/network"
 	"github.com/SotirisAlfonsos/chaos-master/web/api"
-	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 )
 
@@ -26,33 +25,36 @@ func main() {
 	debugLevel := flag.String("debug.level", "info", "the debug level for the chaos master")
 	flag.Parse()
 
-	logger := createLogger(*debugLevel)
+	loggers := createLoggers(*debugLevel)
 
 	conf, err := config.GetConfig(*configFile)
 	if err != nil {
-		_ = level.Error(logger).Log("err", err)
+		_ = level.Error(loggers.ErrLogger).Log("err", err)
 		os.Exit(1)
 	}
 
-	connections := network.GetConnectionPool(conf, logger)
-	jobMap := conf.GetJobMap(logger)
+	connections := network.GetConnectionPool(conf, loggers)
+	jobMap := conf.GetJobMap(loggers)
 
 	var healthChecker *healthcheck.HealthChecker
 
 	if conf.HealthCheck.Active {
-		healthChecker := healthcheck.Register(connections, logger)
+		healthChecker := healthcheck.Register(connections, loggers)
 		healthChecker.Start(conf.HealthCheck.Report)
 	}
-	options := api.NewAPIOptions(conf.APIOptions, jobMap, connections, logger)
+	options := api.NewAPIOptions(conf.APIOptions, jobMap, connections, loggers)
 	restAPI := api.NewRestAPI(options, healthChecker)
 	restAPI.RunAPIController()
 }
 
-func createLogger(debugLevel string) log.Logger {
+func createLoggers(debugLevel string) chaoslogger.Loggers {
 	allowLevel := &chaoslogger.AllowedLevel{}
 	if err := allowLevel.Set(debugLevel); err != nil {
 		fmt.Printf("%v", err)
 	}
 
-	return chaoslogger.New(allowLevel)
+	return chaoslogger.Loggers{
+		OutLogger: chaoslogger.New(allowLevel, os.Stdout),
+		ErrLogger: chaoslogger.New(allowLevel, os.Stderr),
+	}
 }

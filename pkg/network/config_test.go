@@ -2,15 +2,15 @@ package network
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
-	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/config"
-	"github.com/go-kit/kit/log"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/chaoslogger"
 	"github.com/stretchr/testify/assert"
 )
 
-var logger = createLogger("info")
+var loggers = createLoggers("info")
 
 type TestData struct {
 	message    string
@@ -51,7 +51,7 @@ func TestSuccessfullySetTargetConnectionPoolForSingleJob(t *testing.T) {
 				},
 			}
 
-			connectionPool := GetConnectionPool(conf, logger)
+			connectionPool := GetConnectionPool(conf, loggers)
 
 			assert.Equal(t, len(dataItem.expected), len(connectionPool.Pool))
 			for _, target := range dataItem.expected {
@@ -96,7 +96,7 @@ func TestSuccessfullySetTargetConnectionPoolForMultipleJob(t *testing.T) {
 				},
 			}
 
-			connectionPool := GetConnectionPool(conf, logger)
+			connectionPool := GetConnectionPool(conf, loggers)
 
 			assert.Equal(t, len(dataItem.expected), len(connectionPool.Pool))
 			for _, target := range dataItem.expected {
@@ -119,14 +119,14 @@ func TestSuccessfullySetTargetConnectionPoolWithTls(t *testing.T) {
 			message: "Should create connections with valid public certs and token provided",
 			jobsConfig: []*config.JobsFromConfig{
 				{JobName: "job name", FailureType: "failure type", ComponentName: "component name", Targets: []string{"127.0.0.1:8081", "127.0.0.2:8081"}}},
-			bots:     &config.Bots{PublicCert: "../config/test/certs/server-cert.pem", PeerToken: "12345"},
+			bots:     &config.Bots{PublicCert: "../../config/test/certs/server-cert.pem", PeerToken: "12345"},
 			expected: []string{"127.0.0.1:8081", "127.0.0.2:8081"},
 		},
 		{
 			message: "Should create connections with valid ca certs and token provided",
 			jobsConfig: []*config.JobsFromConfig{
 				{JobName: "job name", FailureType: "failure type", ComponentName: "component name", Targets: []string{"127.0.0.1:8081"}}},
-			bots:     &config.Bots{CACert: "../config/test/certs/ca-cert.pem", PeerToken: "12345"},
+			bots:     &config.Bots{CACert: "../../config/test/certs/ca-cert.pem", PeerToken: "12345"},
 			expected: []string{"127.0.0.1:8081"},
 		},
 	}
@@ -138,17 +138,17 @@ func TestSuccessfullySetTargetConnectionPoolWithTls(t *testing.T) {
 				Bots:           dataItem.bots,
 			}
 
-			connectionPool := GetConnectionPool(conf, logger)
+			connectionPool := GetConnectionPool(conf, loggers)
 
 			assert.Equal(t, len(dataItem.expected), len(connectionPool.Pool))
 			for _, target := range dataItem.expected {
-				if _, err := connectionPool.Pool[target].GetHealthClient(target); err != nil {
+				if _, err := connectionPool.Pool[target].GetHealthClient(); err != nil {
 					t.Errorf("Connection redial should not have error when getting the health client")
 				}
-				if _, err := connectionPool.Pool[target].GetDockerClient(target); err != nil {
+				if _, err := connectionPool.Pool[target].GetDockerClient(); err != nil {
 					t.Errorf("Connection redial should not have error when getting the docker client")
 				}
-				if _, err := connectionPool.Pool[target].GetServiceClient(target); err != nil {
+				if _, err := connectionPool.Pool[target].GetServiceClient(); err != nil {
 					t.Errorf("Connection redial should not have error when getting the service client")
 				}
 				assert.NotNil(t, connectionPool.Pool[target])
@@ -182,17 +182,17 @@ func TestRedialFailureWithTls(t *testing.T) {
 				Bots:           dataItem.bots,
 			}
 
-			connectionPool := GetConnectionPool(conf, logger)
+			connectionPool := GetConnectionPool(conf, loggers)
 
 			assert.Equal(t, len(dataItem.expected), len(connectionPool.Pool))
 			for _, target := range dataItem.expected {
-				if _, err := connectionPool.Pool[target].GetHealthClient(target); err == nil {
+				if _, err := connectionPool.Pool[target].GetHealthClient(); err == nil {
 					t.Errorf("Connection redial should have error when getting the health client")
 				}
-				if _, err := connectionPool.Pool[target].GetDockerClient(target); err == nil {
+				if _, err := connectionPool.Pool[target].GetDockerClient(); err == nil {
 					t.Errorf("Connection redial should have error when getting the docker client")
 				}
-				if _, err := connectionPool.Pool[target].GetServiceClient(target); err == nil {
+				if _, err := connectionPool.Pool[target].GetServiceClient(); err == nil {
 					t.Errorf("Connection redial should have error when getting the service client")
 				}
 			}
@@ -200,11 +200,14 @@ func TestRedialFailureWithTls(t *testing.T) {
 	}
 }
 
-func createLogger(debugLevel string) log.Logger {
+func createLoggers(debugLevel string) chaoslogger.Loggers {
 	allowLevel := &chaoslogger.AllowedLevel{}
 	if err := allowLevel.Set(debugLevel); err != nil {
 		fmt.Printf("%v", err)
 	}
 
-	return chaoslogger.New(allowLevel)
+	return chaoslogger.Loggers{
+		OutLogger: chaoslogger.New(allowLevel, os.Stdout),
+		ErrLogger: chaoslogger.New(allowLevel, os.Stderr),
+	}
 }

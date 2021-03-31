@@ -5,67 +5,78 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"sort"
 	"testing"
 
+	"github.com/SotirisAlfonsos/gocache"
+
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
-	"github.com/SotirisAlfonsos/chaos-master/cache"
-	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/cache"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/chaoslogger"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
-	"github.com/go-kit/kit/log"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
-	logger = getLogger()
+	loggers = getLogger()
 )
 
 type TestData struct {
 	message    string
-	cacheItems map[*cache.Key]func() (*v1.StatusResponse, error)
+	cacheItems map[cache.Key]func() (*v1.StatusResponse, error)
 	alerts     []*Alert
 	expected   *expectedResult
 }
 
 type expectedResult struct {
 	cacheSize int
-	payload   *response.RecoverResponsePayload
+	response  *responseWrapper
+}
+
+type responseWrapper struct {
+	status          int
+	httpErrMessage  string
+	recoverMessages []*response.RecoverMessage
+	err             error
 }
 
 func TestRecoverAllRequestSuccess(t *testing.T) { //nolint:dupl
 	dataItems := []TestData{
 		{
 			message: "Successfully recover all items from cache",
-			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
-				&cache.Key{Job: "job", Target: "127.0.0.1"}: functionWithSuccessResponse(),
-				&cache.Key{Job: "job", Target: "127.0.0.2"}: functionWithSuccessResponse(),
+			cacheItems: map[cache.Key]func() (*v1.StatusResponse, error){
+				cache.Key{Job: "job", Target: "127.0.0.1"}: functionWithSuccessResponse(),
+				cache.Key{Job: "job", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverAll: true},
 			}},
-			expected: &expectedResult{cacheSize: 0, payload: okResponse("SUCCESS", "SUCCESS")},
+			expected: &expectedResult{cacheSize: 0, response: okResponse("SUCCESS", "SUCCESS")},
 		},
 		{
 			message: "Successfully recover one item from the cache and record failure on the rest",
-			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
-				&cache.Key{Job: "job_1", Target: "127.0.0.1"}: functionWithSuccessResponse(),
-				&cache.Key{Job: "job", Target: "127.0.0.2"}:   functionWithFailureResponse(),
-				&cache.Key{Job: "job", Target: "127.0.0.3"}:   functionWithErrorResponse(),
+			cacheItems: map[cache.Key]func() (*v1.StatusResponse, error){
+				cache.Key{Job: "job_1", Target: "127.0.0.1"}: functionWithSuccessResponse(),
+				cache.Key{Job: "job", Target: "127.0.0.2"}:   functionWithFailureResponse(),
+				cache.Key{Job: "job", Target: "127.0.0.3"}:   functionWithErrorResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverAll: true},
 			}},
-			expected: &expectedResult{cacheSize: 2, payload: okResponse("SUCCESS", "FAILURE", "FAILURE")},
+			expected: &expectedResult{cacheSize: 2, response: okResponse("SUCCESS", "FAILURE", "FAILURE")},
 		},
 		{
 			message:    "Should not do anything and return ok for cache already empty",
-			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){},
+			cacheItems: map[cache.Key]func() (*v1.StatusResponse, error){},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverAll: true},
 			}},
-			expected: &expectedResult{cacheSize: 0, payload: okResponse()},
+			expected: &expectedResult{cacheSize: 0, response: okResponse()},
 		},
 	}
 
@@ -78,38 +89,38 @@ func TestRecoverJobRequestSuccess(t *testing.T) { //nolint:dupl
 	dataItems := []TestData{
 		{
 			message: "Successfully recover all items from cache for job {job name}, while not removing other jobs",
-			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
-				&cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
-				&cache.Key{Job: "job name", Target: "127.0.0.2"}:           functionWithSuccessResponse(),
-				&cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
+			cacheItems: map[cache.Key]func() (*v1.StatusResponse, error){
+				cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
+				cache.Key{Job: "job name", Target: "127.0.0.2"}:           functionWithSuccessResponse(),
+				cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverJob: "job name"},
 			}},
-			expected: &expectedResult{cacheSize: 1, payload: okResponse("SUCCESS", "SUCCESS")},
+			expected: &expectedResult{cacheSize: 1, response: okResponse("SUCCESS", "SUCCESS")},
 		},
 		{
 			message: "Successfully recover one item from the cache and record failure on the rest for job {job name}, while not removing other jobs",
-			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
-				&cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
-				&cache.Key{Job: "job name", Target: "127.0.0.2"}:           functionWithFailureResponse(),
-				&cache.Key{Job: "job name", Target: "127.0.0.3"}:           functionWithErrorResponse(),
-				&cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
+			cacheItems: map[cache.Key]func() (*v1.StatusResponse, error){
+				cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
+				cache.Key{Job: "job name", Target: "127.0.0.2"}:           functionWithFailureResponse(),
+				cache.Key{Job: "job name", Target: "127.0.0.3"}:           functionWithErrorResponse(),
+				cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverJob: "job name"},
 			}},
-			expected: &expectedResult{cacheSize: 3, payload: okResponse("SUCCESS", "FAILURE", "FAILURE")},
+			expected: &expectedResult{cacheSize: 3, response: okResponse("SUCCESS", "FAILURE", "FAILURE")},
 		},
 		{
 			message: "Should not do anything and return ok for job {job name} not in cache",
-			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
-				&cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
+			cacheItems: map[cache.Key]func() (*v1.StatusResponse, error){
+				cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverJob: "job name"},
 			}},
-			expected: &expectedResult{cacheSize: 1, payload: okResponse()},
+			expected: &expectedResult{cacheSize: 1, response: okResponse()},
 		},
 	}
 
@@ -122,38 +133,38 @@ func TestRecoverTargetRequestSuccess(t *testing.T) { //nolint:dupl
 	dataItems := []TestData{
 		{
 			message: "Successfully recover all items from cache for target {127.0.0.1}, while not removing other jobs",
-			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
-				&cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
-				&cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
-				&cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
+			cacheItems: map[cache.Key]func() (*v1.StatusResponse, error){
+				cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
+				cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
+				cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverTarget: "127.0.0.1"},
 			}},
-			expected: &expectedResult{cacheSize: 1, payload: okResponse("SUCCESS", "SUCCESS")},
+			expected: &expectedResult{cacheSize: 1, response: okResponse("SUCCESS", "SUCCESS")},
 		},
 		{
 			message: "Successfully recover one item from the cache and record failure on the rest for target {127.0.0.1}, while not removing other jobs",
-			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
-				&cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
-				&cache.Key{Job: "job other name", Target: "127.0.0.1"}:     functionWithFailureResponse(),
-				&cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithErrorResponse(),
-				&cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
+			cacheItems: map[cache.Key]func() (*v1.StatusResponse, error){
+				cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
+				cache.Key{Job: "job other name", Target: "127.0.0.1"}:     functionWithFailureResponse(),
+				cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithErrorResponse(),
+				cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverTarget: "127.0.0.1"},
 			}},
-			expected: &expectedResult{cacheSize: 3, payload: okResponse("SUCCESS", "FAILURE", "FAILURE")},
+			expected: &expectedResult{cacheSize: 3, response: okResponse("SUCCESS", "FAILURE", "FAILURE")},
 		},
 		{
 			message: "Should not do anything and return ok for target {127.0.0.1} not in cache",
-			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
-				&cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
+			cacheItems: map[cache.Key]func() (*v1.StatusResponse, error){
+				cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverTarget: "127.0.0.1"},
 			}},
-			expected: &expectedResult{cacheSize: 1, payload: okResponse()},
+			expected: &expectedResult{cacheSize: 1, response: okResponse()},
 		},
 	}
 
@@ -166,10 +177,10 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 	dataItems := []TestData{
 		{
 			message: "Successfully recover items on firing and ignore resolved alerts, resulting in two jobs recovered",
-			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
-				&cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
-				&cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
-				&cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
+			cacheItems: map[cache.Key]func() (*v1.StatusResponse, error){
+				cache.Key{Job: "job name", Target: "127.0.0.1"}:           functionWithSuccessResponse(),
+				cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
+				cache.Key{Job: "job different name", Target: "127.0.0.2"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{
 				{Status: "firing", Labels: Labels{RecoverTarget: "127.0.0.1"}},
@@ -177,30 +188,30 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 				{Status: "resolved", Labels: Labels{RecoverAll: true}},
 				{Status: "resolved", Labels: Labels{RecoverJob: "job name"}},
 			},
-			expected: &expectedResult{cacheSize: 1, payload: okResponse("SUCCESS", "SUCCESS")},
+			expected: &expectedResult{cacheSize: 1, response: okResponse("SUCCESS", "SUCCESS")},
 		},
 		{
 			message: "Should not do anything for resolved alerts, no items should be removed from cache",
-			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
-				&cache.Key{Job: "job name", Target: "127.0.0.1"}:       functionWithSuccessResponse(),
-				&cache.Key{Job: "job other name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
+			cacheItems: map[cache.Key]func() (*v1.StatusResponse, error){
+				cache.Key{Job: "job name", Target: "127.0.0.1"}:       functionWithSuccessResponse(),
+				cache.Key{Job: "job other name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{
 				{Status: "resolved", Labels: Labels{RecoverTarget: "127.0.0.1"}},
 				{Status: "resolved", Labels: Labels{RecoverAll: true}},
 				{Status: "resolved", Labels: Labels{RecoverJob: "job name"}},
 			},
-			expected: &expectedResult{cacheSize: 2, payload: okResponse()},
+			expected: &expectedResult{cacheSize: 2, response: okResponse()},
 		},
 		{
 			message: "Should not do anything for unknown alert status, no items should be removed from cache",
-			cacheItems: map[*cache.Key]func() (*v1.StatusResponse, error){
-				&cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
+			cacheItems: map[cache.Key]func() (*v1.StatusResponse, error){
+				cache.Key{Job: "job different name", Target: "127.0.0.1"}: functionWithSuccessResponse(),
 			},
 			alerts: []*Alert{{
 				Status: "unknown", Labels: Labels{RecoverAll: true},
 			}},
-			expected: &expectedResult{cacheSize: 1, payload: badRequestResponse("The status {unknown} is not supported")},
+			expected: &expectedResult{cacheSize: 1, response: badRequestResponse("The status {unknown} is not supported")},
 		},
 	}
 
@@ -211,46 +222,41 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 
 func assertSuccessfulRecovery(t *testing.T, dataItem TestData) {
 	t.Run(dataItem.message, func(t *testing.T) {
-		cacheManager := cache.NewCacheManager(logger)
+		cacheManager := gocache.New(0)
 		server, err := recoverHTTPTestServerWithCacheItems(cacheManager, dataItem.cacheItems)
 		if err != nil {
 			t.Fatal(err)
 		}
 		requestPayload := newRequestPayload(dataItem.alerts)
 
-		responsePayload, err := restorePostCall(server, requestPayload)
+		status, httpErrorMessage, recoverMessages, err := restorePostCall(server, requestPayload)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		assert.Equal(t, dataItem.expected.payload.Status, responsePayload.Status)
-		assert.Equal(t, len(dataItem.expected.payload.RecoverMessage), len(responsePayload.RecoverMessage))
-		assert.Equal(t, dataItem.expected.payload.GetSortedStatuses(), responsePayload.GetSortedStatuses())
+		assert.Equal(t, dataItem.expected.response.status, status)
+		assert.Equal(t, len(dataItem.expected.response.recoverMessages), len(recoverMessages))
+		assert.Equal(t, dataItem.expected.response.httpErrMessage, httpErrorMessage)
+		assert.Equal(t, getSortedStatuses(dataItem.expected.response.recoverMessages), getSortedStatuses(recoverMessages))
 		assert.Equal(t, dataItem.expected.cacheSize, cacheManager.ItemCount())
 	})
 }
 
-func okResponse(statuses ...string) *response.RecoverResponsePayload {
+func okResponse(statuses ...string) *responseWrapper {
 	recoverMessages := make([]*response.RecoverMessage, 0, len(statuses))
 	for _, status := range statuses {
 		recoverMessages = append(recoverMessages, &response.RecoverMessage{Status: status})
 	}
-	return &response.RecoverResponsePayload{
-		RecoverMessage: recoverMessages,
-		Status:         200,
+	return &responseWrapper{
+		recoverMessages: recoverMessages,
+		status:          200,
 	}
 }
 
-func badRequestResponse(message string) *response.RecoverResponsePayload {
-	recoverMessage := &response.RecoverMessage{
-		Message: message,
-		Status:  "FAILURE",
-	}
-	recoverMessages := make([]*response.RecoverMessage, 0, 1)
-	recoverMessages = append(recoverMessages, recoverMessage)
-	return &response.RecoverResponsePayload{
-		RecoverMessage: recoverMessages,
-		Status:         400,
+func badRequestResponse(message string) *responseWrapper {
+	return &responseWrapper{
+		httpErrMessage: message + "\n",
+		status:         400,
 	}
 }
 
@@ -273,19 +279,16 @@ func functionWithErrorResponse() func() (*v1.StatusResponse, error) {
 }
 
 func recoverHTTPTestServerWithCacheItems(
-	cacheManager *cache.Manager,
-	cacheItems map[*cache.Key]func() (*v1.StatusResponse, error),
+	cache *gocache.Cache,
+	cacheItems map[cache.Key]func() (*v1.StatusResponse, error),
 ) (*httptest.Server, error) {
 	for key, val := range cacheItems {
-		err := cacheManager.Register(key, val)
-		if err != nil {
-			return nil, err
-		}
+		cache.Set(key, val)
 	}
 
 	rController := &RController{
-		cacheManager: cacheManager,
-		logger:       logger,
+		cache:   cache,
+		loggers: loggers,
 	}
 
 	router := mux.NewRouter()
@@ -295,39 +298,56 @@ func recoverHTTPTestServerWithCacheItems(
 	return httptest.NewServer(router), nil
 }
 
-func newRequestPayload(alerts []*Alert) *requestPayload {
-	return &requestPayload{
+func newRequestPayload(alerts []*Alert) *RequestPayload {
+	return &RequestPayload{
 		Alerts: alerts,
 	}
 }
 
-func restorePostCall(server *httptest.Server, requestPayload *requestPayload) (*response.RecoverResponsePayload, error) {
+func restorePostCall(server *httptest.Server, requestPayload *RequestPayload) (int, string, []*response.RecoverMessage, error) {
 	requestBody, _ := json.Marshal(requestPayload)
 	url := server.URL + "/recover/alertmanager"
 
 	return post(requestBody, url)
 }
 
-func post(requestBody []byte, url string) (*response.RecoverResponsePayload, error) {
+func post(requestBody []byte, url string) (int, string, []*response.RecoverMessage, error) {
 	resp, err := http.Post(url, "", bytes.NewReader(requestBody)) //nolint:gosec
 	if err != nil {
-		return nil, err
+		return 0, "", nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		b, _ := ioutil.ReadAll(resp.Body)
+		return resp.StatusCode, string(b), nil, nil
+	}
 
 	respPayload := &response.RecoverResponsePayload{}
 	err = json.NewDecoder(resp.Body).Decode(&respPayload)
 	if err != nil {
-		return &response.RecoverResponsePayload{Status: resp.StatusCode}, err
+		return resp.StatusCode, "", nil, err
 	}
-	return respPayload, nil
+	return respPayload.Status, "", respPayload.RecoverMessage, nil
 }
 
-func getLogger() log.Logger {
+func getSortedStatuses(recoverMessages []*response.RecoverMessage) []string {
+	statuses := make([]string, 0, len(recoverMessages))
+	for _, recoverMessage := range recoverMessages {
+		statuses = append(statuses, recoverMessage.Status)
+	}
+	sort.Strings(statuses)
+	return statuses
+}
+
+func getLogger() chaoslogger.Loggers {
 	allowLevel := &chaoslogger.AllowedLevel{}
 	if err := allowLevel.Set("debug"); err != nil {
 		fmt.Printf("%v", err)
 	}
 
-	return chaoslogger.New(allowLevel)
+	return chaoslogger.Loggers{
+		OutLogger: chaoslogger.New(allowLevel, os.Stdout),
+		ErrLogger: chaoslogger.New(allowLevel, os.Stderr),
+	}
 }

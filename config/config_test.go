@@ -2,16 +2,15 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
-	"github.com/SotirisAlfonsos/chaos-master/chaoslogger"
-	"github.com/go-kit/kit/log"
-
+	"github.com/SotirisAlfonsos/chaos-master/pkg/chaoslogger"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
-	logger = getLogger()
+	loggers = getLoggers()
 )
 
 func TestShouldUnmarshalSimpleConfig(t *testing.T) {
@@ -111,7 +110,7 @@ func TestShouldGetJobMap(t *testing.T) {
 		t.Fatal("Config should not be nil")
 	}
 
-	jobMap := config.GetJobMap(logger)
+	jobMap := config.GetJobMap(loggers)
 
 	assert.Equal(t, 5, len(config.JobsFromConfig)-1)
 	assert.Equal(t, "my_zoo", jobMap["zookeeper docker"].ComponentName)
@@ -130,11 +129,14 @@ func TestShouldGetJobMap(t *testing.T) {
 	assert.Equal(t, 1, len(jobMap["network injection"].Target))
 }
 
-func getLogger() log.Logger {
+func getLoggers() chaoslogger.Loggers {
 	allowLevel := &chaoslogger.AllowedLevel{}
 	if err := allowLevel.Set("debug"); err != nil {
 		fmt.Printf("%v", err)
 	}
 
-	return chaoslogger.New(allowLevel)
+	return chaoslogger.Loggers{
+		OutLogger: chaoslogger.New(allowLevel, os.Stdout),
+		ErrLogger: chaoslogger.New(allowLevel, os.Stderr),
+	}
 }

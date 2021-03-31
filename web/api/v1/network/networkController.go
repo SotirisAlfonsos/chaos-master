@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/SotirisAlfonsos/gocache"
+
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
-	"github.com/SotirisAlfonsos/chaos-master/cache"
 	"github.com/SotirisAlfonsos/chaos-master/config"
-	"github.com/SotirisAlfonsos/chaos-master/network"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/cache"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/chaoslogger"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/network"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
-	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 )
@@ -19,8 +21,8 @@ import (
 type NController struct {
 	jobs           map[string]*config.Job
 	connectionPool map[string]*nConnection
-	cacheManager   *cache.Manager
-	logger         log.Logger
+	cache          *gocache.Cache
+	loggers        chaoslogger.Loggers
 }
 
 type nConnection struct {
@@ -30,8 +32,8 @@ type nConnection struct {
 func NewNetworkController(
 	jobs map[string]*config.Job,
 	connections *network.Connections,
-	cache *cache.Manager,
-	logger log.Logger,
+	cache *gocache.Cache,
+	loggers chaoslogger.Loggers,
 ) *NController {
 	connPool := make(map[string]*nConnection)
 	for target, connection := range connections.Pool {
@@ -42,8 +44,8 @@ func NewNetworkController(
 	return &NController{
 		jobs:           jobs,
 		connectionPool: connPool,
-		cacheManager:   cache,
-		logger:         logger,
+		cache:          cache,
+		loggers:        loggers,
 	}
 }
 
@@ -120,120 +122,115 @@ func newNetworkRequest(details *RequestPayload) *v1.NetworkRequest {
 // @Failure 500 {object} response.Payload
 // @Router /network [post]
 func (n *NController) NetworkAction(w http.ResponseWriter, r *http.Request) {
-	resp := response.NewDefaultResponse()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	requestPayload := &RequestPayload{}
 	err := json.NewDecoder(r.Body).Decode(&requestPayload)
 	if err != nil {
-		resp.BadRequest("Could not decode request body", n.logger)
-		resp.SetInWriter(w, n.logger)
+		response.BadRequest(w, "Could not decode request body", n.loggers)
 		return
 	}
 
 	action, err := toActionEnum(r.FormValue("action"))
 	if err != nil {
-		resp.BadRequest(err.Error(), n.logger)
-		resp.SetInWriter(w, n.logger)
+		response.BadRequest(w, err.Error(), n.loggers)
 		return
 	}
 
-	_ = level.Info(n.logger).Log("msg",
+	err = checkIfTargetExists(n.jobs, requestPayload)
+	if err != nil {
+		response.BadRequest(w, err.Error(), n.loggers)
+		return
+	}
+
+	_ = level.Info(n.loggers.OutLogger).Log("msg",
 		fmt.Sprintf("%s network injection for device {%s} on target {%s}", action, requestPayload.Device, requestPayload.Target))
 
-	target, err := getTargetIfExists(n.jobs, requestPayload)
+	message, err := n.performAction(ctx, action, requestPayload)
 	if err != nil {
-		resp.BadRequest(err.Error(), n.logger)
-		resp.SetInWriter(w, n.logger)
+		response.InternalServerError(w, err.Error(), n.loggers)
 		return
 	}
 
-	networkRequest := newNetworkRequest(requestPayload)
-	n.performAction(action, n.connectionPool[target], networkRequest, requestPayload, resp)
+	_ = level.Info(n.loggers.OutLogger).Log("msg", message)
 
-	resp.SetInWriter(w, n.logger)
+	response.OkResponse(w, message, n.loggers)
 }
 
-func getTargetIfExists(jobMap map[string]*config.Job, requestPayload *RequestPayload) (string, error) {
+func checkIfTargetExists(jobMap map[string]*config.Job, requestPayload *RequestPayload) error {
 	job, ok := jobMap[requestPayload.Job]
 	if !ok {
-		return "", errors.New(fmt.Sprintf("Could not find job {%s}", requestPayload.Job))
+		return errors.New(fmt.Sprintf("Could not find job {%s}", requestPayload.Job))
 	}
 
+	ok = checkIfTargetExistsForJob(job, requestPayload.Target)
+	if !ok {
+		return errors.New(fmt.Sprintf("Target {%s} is not registered for job {%s}", requestPayload.Target, requestPayload.Job))
+	}
+
+	return nil
+}
+
+func checkIfTargetExistsForJob(job *config.Job, requestTarget string) bool {
 	for _, target := range job.Target {
-		if target == requestPayload.Target {
-			return target, nil
+		if target == requestTarget {
+			return true
 		}
 	}
 
-	return "", errors.New(fmt.Sprintf("Target {%s} is not registered for job {%s}", requestPayload.Target, requestPayload.Job))
+	return false
 }
 
 func (n *NController) performAction(
+	ctx context.Context,
 	action action,
-	sConnection *nConnection,
-	networkRequest *v1.NetworkRequest,
-	requestPayload *RequestPayload,
-	resp *response.Payload,
-) {
+	request *RequestPayload,
+) (string, error) {
 	var statusResponse *v1.StatusResponse
 	var err error
 
-	networkClient, err := sConnection.connection.GetNetworkClient(requestPayload.Target)
+	networkClient, err := n.connectionPool[request.Target].connection.GetNetworkClient()
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Can not get network connection from target {%s}", requestPayload.Target))
-		resp.InternalServerError(err.Error(), n.logger)
-		return
+		return "", errors.Wrap(err, fmt.Sprintf("Can not get network connection from target {%s}", request.Target))
 	}
 
 	switch action {
 	case start:
-		statusResponse, err = networkClient.Start(context.Background(), networkRequest)
+		statusResponse, err = networkClient.Start(ctx, newNetworkRequest(request))
 	case stop:
-		statusResponse, err = networkClient.Stop(context.Background(), networkRequest)
-	default:
-		resp.BadRequest(fmt.Sprintf("Action {%s} not allowed", action), n.logger)
-		return
+		statusResponse, err = networkClient.Stop(ctx, newNetworkRequest(request))
 	}
 
-	message, err := handleGRPCResponse(statusResponse, err, requestPayload.Target)
-	if err != nil {
-		resp.InternalServerError(err.Error(), n.logger)
-		return
-	}
-
-	resp.Message = message
-	_ = level.Info(n.logger).Log("msg", resp.Message)
-
-	key := &cache.Key{
-		Job:    requestPayload.Job,
-		Target: requestPayload.Target,
-	}
-
-	if err = n.updateCache(networkRequest, networkClient, key, action); err != nil {
-		_ = level.Error(n.logger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
-	}
-}
-
-func handleGRPCResponse(statusResponse *v1.StatusResponse, err error, target string) (string, error) {
 	switch {
 	case err != nil:
-		return "", errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", target))
+		return "", errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", request.Target))
 	case statusResponse.Status != v1.StatusResponse_SUCCESS:
-		return "", errors.New(fmt.Sprintf("Failure response from target {%s}", target))
+		return "", errors.New(fmt.Sprintf("Failure response from target {%s}", request.Target))
 	default:
-		return fmt.Sprintf("Response from target {%s}, {%s}, {%s}", target, statusResponse.Message, statusResponse.Status), nil
+		if err = n.updateCache(networkClient, request, action); err != nil {
+			_ = level.Error(n.loggers.ErrLogger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
+		}
 	}
+
+	return fmt.Sprintf("Response from target {%s}, {%s}, {%s}", request.Target, statusResponse.Message, statusResponse.Status), nil
 }
 
-func (n *NController) updateCache(networkRequest *v1.NetworkRequest, networkClient v1.NetworkClient, key *cache.Key, action action) error {
+func (n *NController) updateCache(networkClient v1.NetworkClient, request *RequestPayload, action action) error {
+	key := cache.Key{
+		Job:    request.Job,
+		Target: request.Target,
+	}
+
 	switch action {
 	case start:
 		recoveryFunc := func() (*v1.StatusResponse, error) {
-			return networkClient.Stop(context.Background(), networkRequest)
+			return networkClient.Stop(context.Background(), newNetworkRequest(request))
 		}
-		return n.cacheManager.Register(key, recoveryFunc)
+		n.cache.Set(key, recoveryFunc)
+		return nil
 	case stop:
-		n.cacheManager.Delete(key)
+		n.cache.Delete(key)
 		return nil
 	default:
 		return errors.New(fmt.Sprintf("Action %s not supported for cache operation", action))

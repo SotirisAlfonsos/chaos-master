@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/SotirisAlfonsos/chaos-master/network"
-
 	v1 "github.com/SotirisAlfonsos/chaos-bot/proto/grpc/v1"
 	"github.com/SotirisAlfonsos/chaos-master/config"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/chaoslogger"
+	"github.com/SotirisAlfonsos/chaos-master/pkg/network"
 	"github.com/SotirisAlfonsos/chaos-master/web/api/v1/response"
-	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 )
@@ -26,7 +25,7 @@ func newServerRequest() *v1.ServerRequest {
 }
 
 type SController struct {
-	logger         log.Logger
+	loggers        chaoslogger.Loggers
 	jobs           jobs
 	connectionPool map[string]*sConnection
 }
@@ -40,7 +39,7 @@ type jobs map[string]*config.Job
 func NewServerController(
 	jobs map[string]*config.Job,
 	connections *network.Connections,
-	logger log.Logger,
+	loggers chaoslogger.Loggers,
 ) *SController {
 	connPool := make(map[string]*sConnection)
 	for target, connection := range connections.Pool {
@@ -51,7 +50,7 @@ func NewServerController(
 	return &SController{
 		jobs:           jobs,
 		connectionPool: connPool,
-		logger:         logger,
+		loggers:        loggers,
 	}
 }
 
@@ -71,90 +70,87 @@ func (sc *SController) ServerAction(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	resp := response.NewDefaultResponse()
-
 	requestPayload := &RequestPayload{}
 	err := json.NewDecoder(r.Body).Decode(&requestPayload)
 	if err != nil {
-		resp.BadRequest("Could not decode request body", sc.logger)
-		resp.SetInWriter(w, sc.logger)
+		response.BadRequest(w, "Could not decode request body", sc.loggers)
 		return
 	}
 
 	action, err := toActionEnum(r.FormValue("action"))
 	if err != nil {
-		resp.BadRequest(err.Error(), sc.logger)
-		resp.SetInWriter(w, sc.logger)
+		response.BadRequest(w, err.Error(), sc.loggers)
 		return
 	}
 
-	_ = level.Info(sc.logger).Log("msg", fmt.Sprintf("%s target with name {%s}", action, requestPayload.Target))
-
-	job, ok := sc.jobs[requestPayload.Job]
-	if !ok {
-		resp.BadRequest(fmt.Sprintf("Could not find job {%s}", requestPayload.Job), sc.logger)
-		resp.SetInWriter(w, sc.logger)
+	err = checkIfTargetExists(sc.jobs, requestPayload)
+	if err != nil {
+		response.BadRequest(w, err.Error(), sc.loggers)
 		return
 	}
 
-	target, ok := getTargetIfExists(job, requestPayload.Target)
-	if !ok {
-		resp.BadRequest(fmt.Sprintf("Target {%s} is not registered for job {%s}", requestPayload.Target, requestPayload.Job), sc.logger)
-		resp.SetInWriter(w, sc.logger)
+	_ = level.Info(sc.loggers.OutLogger).Log("msg", fmt.Sprintf("%s target with name {%s}", action, requestPayload.Target))
+
+	message, err := sc.performAction(ctx, action, requestPayload)
+	if err != nil {
+		response.InternalServerError(w, err.Error(), sc.loggers)
 		return
 	}
 
-	serverRequest := newServerRequest()
-	sc.performAction(ctx, action, serverRequest, target, resp)
+	_ = level.Info(sc.loggers.OutLogger).Log("msg", message)
 
-	resp.SetInWriter(w, sc.logger)
+	response.OkResponse(w, message, sc.loggers)
 }
 
 func (sc *SController) performAction(
 	ctx context.Context,
 	action action,
-	serverRequest *v1.ServerRequest,
-	target string,
-	resp *response.Payload,
-) {
+	request *RequestPayload,
+) (string, error) {
 	var statusResponse *v1.StatusResponse
 	var err error
 
-	serverClient, err := sc.connectionPool[target].connection.GetServerClient(target)
+	serverClient, err := sc.connectionPool[request.Target].connection.GetServerClient()
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Can not get server connection from target {%s}", target))
-		resp.InternalServerError(err.Error(), sc.logger)
-		return
+		return "", errors.Wrap(err, fmt.Sprintf("Can not get server connection from target {%s}", request.Target))
 	}
 
-	switch action {
-	case stop:
-		statusResponse, err = serverClient.Stop(ctx, serverRequest)
-	default:
-		resp.BadRequest(fmt.Sprintf("Action {%s} not allowed", action), sc.logger)
-		return
+	if action == stop {
+		statusResponse, err = serverClient.Stop(ctx, newServerRequest())
 	}
 
 	switch {
 	case err != nil:
-		err = errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", target))
-		resp.InternalServerError(err.Error(), sc.logger)
+		return "", errors.Wrap(err, fmt.Sprintf("Error response from target {%s}", request.Target))
 	case statusResponse.Status != v1.StatusResponse_SUCCESS:
-		resp.InternalServerError(fmt.Sprintf("Failure response from target {%s}", target), sc.logger)
-	default:
-		resp.Message = fmt.Sprintf("Response from target {%s}, {%s}, {%s}", target, statusResponse.Message, statusResponse.Status)
-		_ = level.Info(sc.logger).Log("msg", resp.Message)
+		return "", errors.New(fmt.Sprintf("Failure response from target {%s}", request.Target))
 	}
+
+	return fmt.Sprintf("Response from target {%s}, {%s}, {%s}", request.Target, statusResponse.Message, statusResponse.Status), nil
 }
 
-func getTargetIfExists(job *config.Job, requestTarget string) (string, bool) {
+func checkIfTargetExists(jobMap map[string]*config.Job, requestPayload *RequestPayload) error {
+	job, ok := jobMap[requestPayload.Job]
+	if !ok {
+		return errors.New(fmt.Sprintf("Could not find job {%s}", requestPayload.Job))
+	}
+
+	ok = checkIfTargetExistsForJob(job, requestPayload.Target)
+	if !ok {
+		return errors.New(fmt.Sprintf("Target {%s} is not registered for job {%s}", requestPayload.Target, requestPayload.Job))
+	}
+
+	return nil
+}
+
+func checkIfTargetExistsForJob(job *config.Job, requestTarget string) bool {
 	for _, target := range job.Target {
 		if target == requestTarget {
-			return target, true
+			return true
 		}
 	}
 
-	return "", false
+	return false
 }
 
 type action int
