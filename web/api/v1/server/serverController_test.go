@@ -42,10 +42,10 @@ type responseWrapper struct {
 	err     error
 }
 
-func TestSuccessServerStop(t *testing.T) {
+func TestSuccessServerKill(t *testing.T) {
 	td := []testData{
 		{
-			message: "Successfully stop server for job and target",
+			message: "Successfully kill server for job and target",
 			jobMap: map[string]*config.Job{
 				"job name": newServerJob("127.0.0.1", "127.0.0.2"),
 			},
@@ -58,7 +58,7 @@ func TestSuccessServerStop(t *testing.T) {
 	}
 
 	for _, test := range td {
-		assertActionPerformed(t, test, "stop")
+		assertActionPerformed(t, test, "kill")
 	}
 }
 
@@ -112,7 +112,7 @@ func TestServerInvalidInputTargetAndJob(t *testing.T) {
 	}
 
 	for _, test := range td {
-		assertActionPerformed(t, test, "stop")
+		assertActionPerformed(t, test, "kill")
 	}
 }
 
@@ -174,7 +174,7 @@ func TestServerInvalidResponseFromBot(t *testing.T) {
 	}
 
 	for _, test := range td {
-		assertActionPerformed(t, test, "stop")
+		assertActionPerformed(t, test, "kill")
 	}
 }
 

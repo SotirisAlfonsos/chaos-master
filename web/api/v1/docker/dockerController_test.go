@@ -48,10 +48,10 @@ type responseWrapper struct {
 	err     error
 }
 
-func TestStartDockerSuccess(t *testing.T) {
+func TestRecoverDockerSuccess(t *testing.T) {
 	dataItems := []TestData{
 		{
-			message: "Successfully start single container with specific job, name and target",
+			message: "Successfully recover single container with specific job, name and target",
 			jobMap: map[string]*config.Job{
 				"job name":           newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
 				"job different name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
@@ -64,7 +64,7 @@ func TestStartDockerSuccess(t *testing.T) {
 			expected:       &expectedResult{cacheSize: 0, response: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 		{
-			message: "Successfully start single container with specific job, name and target and remove it from the cache",
+			message: "Successfully recover single container with specific job, name and target and remove it from the cache",
 			jobMap: map[string]*config.Job{
 				"job name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
 			},
@@ -80,14 +80,14 @@ func TestStartDockerSuccess(t *testing.T) {
 	}
 
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "start")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 }
 
-func TestStopDockerSuccess(t *testing.T) {
+func TestKillDockerSuccess(t *testing.T) {
 	dataItems := []TestData{
 		{
-			message: "Successfully stop single container with specific job, name and target and add it in cache",
+			message: "Successfully kill single container with specific job, name and target and add it in cache",
 			jobMap: map[string]*config.Job{
 				"job name":           newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
 				"job different name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
@@ -103,7 +103,7 @@ func TestStopDockerSuccess(t *testing.T) {
 			expected:       &expectedResult{cacheSize: 2, response: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 		{
-			message: "Successfully stop single container with specific job, name and target and dont add it in cache if already exists",
+			message: "Successfully kill single container with specific job, name and target and dont add it in cache if already exists",
 			jobMap: map[string]*config.Job{
 				"job name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
 			},
@@ -119,7 +119,7 @@ func TestStopDockerSuccess(t *testing.T) {
 	}
 
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "stop")
+		assertActionPerformed(t, dataItem, "kill")
 	}
 }
 
@@ -164,14 +164,14 @@ func TestDockerActionOneOfJobContainerNameTargetDoesNotExist(t *testing.T) {
 		},
 	}
 
-	t.Log("Action start")
+	t.Log("Action recover")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "start")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 
-	t.Log("Action stop")
+	t.Log("Action kill")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "stop")
+		assertActionPerformed(t, dataItem, "kill")
 	}
 }
 
@@ -203,14 +203,14 @@ func TestDockerActionFailure(t *testing.T) {
 		},
 	}
 
-	t.Log("Action start")
+	t.Log("Action recover")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "start")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 
-	t.Log("Action stop")
+	t.Log("Action kill")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "stop")
+		assertActionPerformed(t, dataItem, "kill")
 	}
 }
 
@@ -229,9 +229,9 @@ func TestServiceActionWithNoGrpcConnectionToTarget(t *testing.T) {
 		},
 	}
 
-	t.Log("Action start")
+	t.Log("Action recover")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "start")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 }
 
@@ -286,10 +286,10 @@ type TestDataForRandomDocker struct {
 	expected       *expectedResult
 }
 
-func TestStartRandomDockerSuccess(t *testing.T) {
+func TestRecoverRandomDockerSuccess(t *testing.T) {
 	dataItems := []TestDataForRandomDocker{
 		{
-			message: "Successfully start random container with specific job and name",
+			message: "Successfully recover random container with specific job and name",
 			jobMap: map[string]*config.Job{
 				"job name":           newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
 				"job different name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
@@ -302,7 +302,7 @@ func TestStartRandomDockerSuccess(t *testing.T) {
 			expected:       &expectedResult{cacheSize: 0, response: okResponse("Response from target {127.0.0.\\d}, {}, {SUCCESS}")},
 		},
 		{
-			message: "Successfully start random container with specific job and name and remove it from the cache",
+			message: "Successfully recover random container with specific job and name and remove it from the cache",
 			jobMap: map[string]*config.Job{
 				"job name": newDockerJob("container name", "127.0.0.1"),
 			},
@@ -318,14 +318,14 @@ func TestStartRandomDockerSuccess(t *testing.T) {
 	}
 
 	for _, dataItem := range dataItems {
-		assertRandomActionPerformed(t, dataItem, "random", "start")
+		assertRandomActionPerformed(t, dataItem, "random", "recover")
 	}
 }
 
-func TestStopRandomDockerSuccess(t *testing.T) {
+func TestKillRandomDockerSuccess(t *testing.T) {
 	dataItems := []TestDataForRandomDocker{
 		{
-			message: "Successfully stop random container with specific job and name and add it in cache",
+			message: "Successfully kill random container with specific job and name and add it in cache",
 			jobMap: map[string]*config.Job{
 				"job name":           newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
 				"job different name": newDockerJob("container name", "127.0.0.1", "127.0.0.2"),
@@ -338,7 +338,7 @@ func TestStopRandomDockerSuccess(t *testing.T) {
 			expected:       &expectedResult{cacheSize: 1, response: okResponse("Response from target {127.0.0.\\d}, {}, {SUCCESS}")},
 		},
 		{
-			message: "Successfully stop random container with specific job and name and dont add it in cache if it is already present",
+			message: "Successfully kill random container with specific job and name and dont add it in cache if it is already present",
 			jobMap: map[string]*config.Job{
 				"job name": newDockerJob("container name", "127.0.0.1"),
 			},
@@ -354,7 +354,7 @@ func TestStopRandomDockerSuccess(t *testing.T) {
 	}
 
 	for _, dataItem := range dataItems {
-		assertRandomActionPerformed(t, dataItem, "random", "stop")
+		assertRandomActionPerformed(t, dataItem, "random", "kill")
 	}
 }
 
@@ -399,14 +399,14 @@ func TestDockerActionForRandomTargetOneOfJobContainerNameTargetDoesNotExist(t *t
 		},
 	}
 
-	t.Log("Action start")
+	t.Log("Action recover")
 	for _, dataItem := range dataItems {
-		assertRandomActionPerformed(t, dataItem, "random", "start")
+		assertRandomActionPerformed(t, dataItem, "random", "recover")
 	}
 
-	t.Log("Action stop")
+	t.Log("Action kill")
 	for _, dataItem := range dataItems {
-		assertRandomActionPerformed(t, dataItem, "random", "stop")
+		assertRandomActionPerformed(t, dataItem, "random", "kill")
 	}
 }
 
@@ -442,14 +442,14 @@ func TestDockerActionForRandomTargetFailure(t *testing.T) {
 		},
 	}
 
-	t.Log("Action start")
+	t.Log("Action recover")
 	for _, dataItem := range dataItems {
-		assertRandomActionPerformed(t, dataItem, "random", "start")
+		assertRandomActionPerformed(t, dataItem, "random", "recover")
 	}
 
-	t.Log("Action stop")
+	t.Log("Action kill")
 	for _, dataItem := range dataItems {
-		assertRandomActionPerformed(t, dataItem, "random", "stop")
+		assertRandomActionPerformed(t, dataItem, "random", "kill")
 	}
 }
 
@@ -491,7 +491,7 @@ func TestDockerActionForRandomTargetWithInvalidDo(t *testing.T) {
 
 	t.Log("Action invalidAction")
 	for _, dataItem := range dataItems {
-		assertRandomActionPerformed(t, dataItem, "invalidDo", "start")
+		assertRandomActionPerformed(t, dataItem, "invalidDo", "recover")
 	}
 }
 

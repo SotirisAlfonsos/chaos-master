@@ -16,13 +16,6 @@ type Payload struct {
 	Status  int    `json:"status"`
 }
 
-func NewDefaultResponse() *Payload {
-	return &Payload{
-		Message: "",
-		Status:  200,
-	}
-}
-
 // The serverError helper writes an error message and stack trace to the errorLog,
 // then sends a generic 500 Internal Server Error response to the user.
 func serverError(w http.ResponseWriter, loggers chaoslogger.Loggers, message string) {
@@ -86,12 +79,31 @@ func (recoverR *RecoverResponsePayload) BadRequest(message string, logger log.Lo
 	_ = level.Warn(logger).Log("msg", "Bad request", "warn", message)
 }
 
-func OkRecoverResponse(w http.ResponseWriter, messages []*RecoverMessage, loggers chaoslogger.Loggers) {
+func RecoverResponse(w http.ResponseWriter, messages []*RecoverMessage, loggers chaoslogger.Loggers) {
+	var status int
+
+	if containsFailures(messages) {
+		status = 500
+	} else {
+		status = 200
+	}
+
 	resp := &RecoverResponsePayload{
 		RecoverMessage: messages,
-		Status:         200,
+		Status:         status,
 	}
+
 	resp.SetInWriter(w, loggers)
+}
+
+func containsFailures(messages []*RecoverMessage) bool {
+	for _, message := range messages {
+		if message.Status == FAILURE.String() {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (recoverR *RecoverResponsePayload) SetInWriter(w http.ResponseWriter, loggers chaoslogger.Loggers) {
@@ -121,13 +133,24 @@ type RecoverMessage struct {
 func FailureRecoverResponse(message string) *RecoverMessage {
 	return &RecoverMessage{
 		Error:  message,
-		Status: "FAILURE",
+		Status: FAILURE.String(),
 	}
 }
 
 func SuccessRecoverResponse(message string) *RecoverMessage {
 	return &RecoverMessage{
 		Message: message,
-		Status:  "SUCCESS",
+		Status:  SUCCESS.String(),
 	}
+}
+
+type status int
+
+const (
+	SUCCESS status = iota
+	FAILURE
+)
+
+func (s status) String() string {
+	return [...]string{"SUCCESS", "FAILURE"}[s]
 }

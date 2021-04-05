@@ -26,7 +26,7 @@ var doc = `{
     "paths": {
         "/cpu": {
             "post": {
-                "description": "Perform CPU spike injection. Provide a percentage that is proportionate to your logical CPUs.",
+                "description": "Perform CPU spike injection. Provide a percentage and the cpu usage will increase based on it",
                 "consumes": [
                     "application/json"
                 ],
@@ -39,8 +39,12 @@ var doc = `{
                 "summary": "Inject CPU failures",
                 "parameters": [
                     {
+                        "enum": [
+                            "start",
+                            "recover"
+                        ],
                         "type": "string",
-                        "description": "Specify to perform a start or a stop for the CPU injection",
+                        "description": "Specify to perform a start or a recover for the CPU injection",
                         "name": "action",
                         "in": "query",
                         "required": true
@@ -65,13 +69,13 @@ var doc = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.Payload"
+                            "type": "string"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/response.Payload"
+                            "type": "string"
                         }
                     }
                 }
@@ -92,14 +96,21 @@ var doc = `{
                 "summary": "Inject docker failures",
                 "parameters": [
                     {
+                        "enum": [
+                            "random"
+                        ],
                         "type": "string",
                         "description": "Specify to perform action for container on random target",
                         "name": "do",
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "kill",
+                            "recover"
+                        ],
                         "type": "string",
-                        "description": "Specify to perform a start or a stop on the specified container",
+                        "description": "Specify to perform a recover or a kill on the specified container",
                         "name": "action",
                         "in": "query",
                         "required": true
@@ -124,13 +135,13 @@ var doc = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.Payload"
+                            "type": "string"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/response.Payload"
+                            "type": "string"
                         }
                     }
                 }
@@ -180,8 +191,12 @@ var doc = `{
                 "summary": "Inject network failures",
                 "parameters": [
                     {
+                        "enum": [
+                            "start",
+                            "recover"
+                        ],
                         "type": "string",
-                        "description": "Specify to perform a start or a stop for a network failure injection",
+                        "description": "Specify to perform a start or recover for a network failure injection",
                         "name": "action",
                         "in": "query",
                         "required": true
@@ -206,13 +221,13 @@ var doc = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.Payload"
+                            "type": "string"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/response.Payload"
+                            "type": "string"
                         }
                     }
                 }
@@ -234,11 +249,11 @@ var doc = `{
                 "parameters": [
                     {
                         "description": "Create request payload that contains the recovery details",
-                        "name": "requestPayload",
+                        "name": "RequestPayload",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/recover.requestPayload"
+                            "$ref": "#/definitions/recover.RequestPayload"
                         }
                     }
                 ],
@@ -252,7 +267,7 @@ var doc = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.RecoverResponsePayload"
+                            "type": "string"
                         }
                     }
                 }
@@ -260,7 +275,7 @@ var doc = `{
         },
         "/server": {
             "post": {
-                "description": "Perform Server fault injection. Supports action to stop the server specified. A shutdown will be executed after 1 minute.",
+                "description": "Perform Server fault injection. Supports action to kill the server specified. A shutdown will be executed after 1 minute.",
                 "consumes": [
                     "application/json"
                 ],
@@ -273,8 +288,11 @@ var doc = `{
                 "summary": "Inject Server failures",
                 "parameters": [
                     {
+                        "enum": [
+                            "kill"
+                        ],
                         "type": "string",
-                        "description": "Specify to perform a stop action on the server",
+                        "description": "Specify to perform a kill action on the server",
                         "name": "action",
                         "in": "query",
                         "required": true
@@ -299,13 +317,13 @@ var doc = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.Payload"
+                            "type": "string"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/response.Payload"
+                            "type": "string"
                         }
                     }
                 }
@@ -326,8 +344,12 @@ var doc = `{
                 "summary": "Inject service failures",
                 "parameters": [
                     {
+                        "enum": [
+                            "kill",
+                            "recover"
+                        ],
                         "type": "string",
-                        "description": "Specify to perform a start or a stop on the specified service",
+                        "description": "Specify to perform a recover or a kill on the specified service",
                         "name": "action",
                         "in": "query",
                         "required": true
@@ -352,13 +374,13 @@ var doc = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.Payload"
+                            "type": "string"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/response.Payload"
+                            "type": "string"
                         }
                     }
                 }
@@ -472,7 +494,7 @@ var doc = `{
                 }
             }
         },
-        "recover.requestPayload": {
+        "recover.RequestPayload": {
             "type": "object",
             "properties": {
                 "alerts": {
@@ -486,9 +508,6 @@ var doc = `{
         "response.Payload": {
             "type": "object",
             "properties": {
-                "error": {
-                    "type": "string"
-                },
                 "message": {
                     "type": "string"
                 },

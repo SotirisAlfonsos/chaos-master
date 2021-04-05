@@ -72,11 +72,11 @@ func GetMockServiceClient(status *v1.StatusResponse, err error) v1.ServiceClient
 	return &mockServiceClient{Status: status, Error: err}
 }
 
-func (msc *mockServiceClient) Start(_ context.Context, _ *v1.ServiceRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
+func (msc *mockServiceClient) Recover(_ context.Context, _ *v1.ServiceRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
 	return msc.Status, msc.Error
 }
 
-func (msc *mockServiceClient) Stop(_ context.Context, _ *v1.ServiceRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
+func (msc *mockServiceClient) Kill(_ context.Context, _ *v1.ServiceRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
 	return msc.Status, msc.Error
 }
 
@@ -89,11 +89,11 @@ func GetMockDockerClient(status *v1.StatusResponse, err error) v1.DockerClient {
 	return &mockDockerClient{Status: status, Error: err}
 }
 
-func (msc *mockDockerClient) Start(_ context.Context, _ *v1.DockerRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
+func (msc *mockDockerClient) Recover(_ context.Context, _ *v1.DockerRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
 	return msc.Status, msc.Error
 }
 
-func (msc *mockDockerClient) Stop(_ context.Context, _ *v1.DockerRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
+func (msc *mockDockerClient) Kill(_ context.Context, _ *v1.DockerRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
 	return msc.Status, msc.Error
 }
 
@@ -110,7 +110,7 @@ func (mcc *mockCPUClient) Start(_ context.Context, _ *v1.CPURequest, _ ...grpc.C
 	return mcc.Status, mcc.Error
 }
 
-func (mcc *mockCPUClient) Stop(_ context.Context, _ *v1.CPURequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
+func (mcc *mockCPUClient) Recover(_ context.Context, _ *v1.CPURequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
 	return mcc.Status, mcc.Error
 }
 
@@ -123,7 +123,7 @@ func GetMockServerClient(status *v1.StatusResponse, err error) v1.ServerClient {
 	return &mockServerClient{Status: status, Error: err}
 }
 
-func (msc *mockServerClient) Stop(_ context.Context, _ *v1.ServerRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
+func (msc *mockServerClient) Kill(_ context.Context, _ *v1.ServerRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
 	return msc.Status, msc.Error
 }
 
@@ -140,6 +140,6 @@ func (mcc *mockNetworkClient) Start(_ context.Context, _ *v1.NetworkRequest, _ .
 	return mcc.Status, mcc.Error
 }
 
-func (mcc *mockNetworkClient) Stop(_ context.Context, _ *v1.NetworkRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
+func (mcc *mockNetworkClient) Recover(_ context.Context, _ *v1.NetworkRequest, _ ...grpc.CallOption) (*v1.StatusResponse, error) {
 	return mcc.Status, mcc.Error
 }

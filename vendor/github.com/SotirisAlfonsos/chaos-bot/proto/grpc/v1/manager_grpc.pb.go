@@ -18,8 +18,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ServiceClient interface {
-	Start(ctx context.Context, in *ServiceRequest, opts ...grpc.CallOption) (*StatusResponse, error)
-	Stop(ctx context.Context, in *ServiceRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	Kill(ctx context.Context, in *ServiceRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	Recover(ctx context.Context, in *ServiceRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 }
 
 type serviceClient struct {
@@ -30,18 +30,18 @@ func NewServiceClient(cc grpc.ClientConnInterface) ServiceClient {
 	return &serviceClient{cc}
 }
 
-func (c *serviceClient) Start(ctx context.Context, in *ServiceRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+func (c *serviceClient) Kill(ctx context.Context, in *ServiceRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
 	out := new(StatusResponse)
-	err := c.cc.Invoke(ctx, "/v1.Service/Start", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/v1.Service/Kill", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *serviceClient) Stop(ctx context.Context, in *ServiceRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+func (c *serviceClient) Recover(ctx context.Context, in *ServiceRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
 	out := new(StatusResponse)
-	err := c.cc.Invoke(ctx, "/v1.Service/Stop", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/v1.Service/Recover", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -52,8 +52,8 @@ func (c *serviceClient) Stop(ctx context.Context, in *ServiceRequest, opts ...gr
 // All implementations must embed UnimplementedServiceServer
 // for forward compatibility
 type ServiceServer interface {
-	Start(context.Context, *ServiceRequest) (*StatusResponse, error)
-	Stop(context.Context, *ServiceRequest) (*StatusResponse, error)
+	Kill(context.Context, *ServiceRequest) (*StatusResponse, error)
+	Recover(context.Context, *ServiceRequest) (*StatusResponse, error)
 	mustEmbedUnimplementedServiceServer()
 }
 
@@ -61,11 +61,11 @@ type ServiceServer interface {
 type UnimplementedServiceServer struct {
 }
 
-func (UnimplementedServiceServer) Start(context.Context, *ServiceRequest) (*StatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
+func (UnimplementedServiceServer) Kill(context.Context, *ServiceRequest) (*StatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Kill not implemented")
 }
-func (UnimplementedServiceServer) Stop(context.Context, *ServiceRequest) (*StatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Stop not implemented")
+func (UnimplementedServiceServer) Recover(context.Context, *ServiceRequest) (*StatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Recover not implemented")
 }
 func (UnimplementedServiceServer) mustEmbedUnimplementedServiceServer() {}
 
@@ -80,38 +80,38 @@ func RegisterServiceServer(s grpc.ServiceRegistrar, srv ServiceServer) {
 	s.RegisterService(&Service_ServiceDesc, srv)
 }
 
-func _Service_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Service_Kill_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ServiceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceServer).Start(ctx, in)
+		return srv.(ServiceServer).Kill(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1.Service/Start",
+		FullMethod: "/v1.Service/Kill",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).Start(ctx, req.(*ServiceRequest))
+		return srv.(ServiceServer).Kill(ctx, req.(*ServiceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Service_Stop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Service_Recover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ServiceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceServer).Stop(ctx, in)
+		return srv.(ServiceServer).Recover(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1.Service/Stop",
+		FullMethod: "/v1.Service/Recover",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).Stop(ctx, req.(*ServiceRequest))
+		return srv.(ServiceServer).Recover(ctx, req.(*ServiceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -124,12 +124,12 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Start",
-			Handler:    _Service_Start_Handler,
+			MethodName: "Kill",
+			Handler:    _Service_Kill_Handler,
 		},
 		{
-			MethodName: "Stop",
-			Handler:    _Service_Stop_Handler,
+			MethodName: "Recover",
+			Handler:    _Service_Recover_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -140,8 +140,8 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DockerClient interface {
-	Start(ctx context.Context, in *DockerRequest, opts ...grpc.CallOption) (*StatusResponse, error)
-	Stop(ctx context.Context, in *DockerRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	Kill(ctx context.Context, in *DockerRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	Recover(ctx context.Context, in *DockerRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 }
 
 type dockerClient struct {
@@ -152,18 +152,18 @@ func NewDockerClient(cc grpc.ClientConnInterface) DockerClient {
 	return &dockerClient{cc}
 }
 
-func (c *dockerClient) Start(ctx context.Context, in *DockerRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+func (c *dockerClient) Kill(ctx context.Context, in *DockerRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
 	out := new(StatusResponse)
-	err := c.cc.Invoke(ctx, "/v1.Docker/Start", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/v1.Docker/Kill", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *dockerClient) Stop(ctx context.Context, in *DockerRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+func (c *dockerClient) Recover(ctx context.Context, in *DockerRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
 	out := new(StatusResponse)
-	err := c.cc.Invoke(ctx, "/v1.Docker/Stop", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/v1.Docker/Recover", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -174,8 +174,8 @@ func (c *dockerClient) Stop(ctx context.Context, in *DockerRequest, opts ...grpc
 // All implementations must embed UnimplementedDockerServer
 // for forward compatibility
 type DockerServer interface {
-	Start(context.Context, *DockerRequest) (*StatusResponse, error)
-	Stop(context.Context, *DockerRequest) (*StatusResponse, error)
+	Kill(context.Context, *DockerRequest) (*StatusResponse, error)
+	Recover(context.Context, *DockerRequest) (*StatusResponse, error)
 	mustEmbedUnimplementedDockerServer()
 }
 
@@ -183,11 +183,11 @@ type DockerServer interface {
 type UnimplementedDockerServer struct {
 }
 
-func (UnimplementedDockerServer) Start(context.Context, *DockerRequest) (*StatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
+func (UnimplementedDockerServer) Kill(context.Context, *DockerRequest) (*StatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Kill not implemented")
 }
-func (UnimplementedDockerServer) Stop(context.Context, *DockerRequest) (*StatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Stop not implemented")
+func (UnimplementedDockerServer) Recover(context.Context, *DockerRequest) (*StatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Recover not implemented")
 }
 func (UnimplementedDockerServer) mustEmbedUnimplementedDockerServer() {}
 
@@ -202,38 +202,38 @@ func RegisterDockerServer(s grpc.ServiceRegistrar, srv DockerServer) {
 	s.RegisterService(&Docker_ServiceDesc, srv)
 }
 
-func _Docker_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Docker_Kill_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DockerRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DockerServer).Start(ctx, in)
+		return srv.(DockerServer).Kill(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1.Docker/Start",
+		FullMethod: "/v1.Docker/Kill",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DockerServer).Start(ctx, req.(*DockerRequest))
+		return srv.(DockerServer).Kill(ctx, req.(*DockerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Docker_Stop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Docker_Recover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DockerRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DockerServer).Stop(ctx, in)
+		return srv.(DockerServer).Recover(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1.Docker/Stop",
+		FullMethod: "/v1.Docker/Recover",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DockerServer).Stop(ctx, req.(*DockerRequest))
+		return srv.(DockerServer).Recover(ctx, req.(*DockerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -246,12 +246,12 @@ var Docker_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*DockerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Start",
-			Handler:    _Docker_Start_Handler,
+			MethodName: "Kill",
+			Handler:    _Docker_Kill_Handler,
 		},
 		{
-			MethodName: "Stop",
-			Handler:    _Docker_Stop_Handler,
+			MethodName: "Recover",
+			Handler:    _Docker_Recover_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -263,7 +263,7 @@ var Docker_ServiceDesc = grpc.ServiceDesc{
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CPUClient interface {
 	Start(ctx context.Context, in *CPURequest, opts ...grpc.CallOption) (*StatusResponse, error)
-	Stop(ctx context.Context, in *CPURequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	Recover(ctx context.Context, in *CPURequest, opts ...grpc.CallOption) (*StatusResponse, error)
 }
 
 type cPUClient struct {
@@ -283,9 +283,9 @@ func (c *cPUClient) Start(ctx context.Context, in *CPURequest, opts ...grpc.Call
 	return out, nil
 }
 
-func (c *cPUClient) Stop(ctx context.Context, in *CPURequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+func (c *cPUClient) Recover(ctx context.Context, in *CPURequest, opts ...grpc.CallOption) (*StatusResponse, error) {
 	out := new(StatusResponse)
-	err := c.cc.Invoke(ctx, "/v1.CPU/Stop", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/v1.CPU/Recover", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +297,7 @@ func (c *cPUClient) Stop(ctx context.Context, in *CPURequest, opts ...grpc.CallO
 // for forward compatibility
 type CPUServer interface {
 	Start(context.Context, *CPURequest) (*StatusResponse, error)
-	Stop(context.Context, *CPURequest) (*StatusResponse, error)
+	Recover(context.Context, *CPURequest) (*StatusResponse, error)
 	mustEmbedUnimplementedCPUServer()
 }
 
@@ -308,8 +308,8 @@ type UnimplementedCPUServer struct {
 func (UnimplementedCPUServer) Start(context.Context, *CPURequest) (*StatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
 }
-func (UnimplementedCPUServer) Stop(context.Context, *CPURequest) (*StatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Stop not implemented")
+func (UnimplementedCPUServer) Recover(context.Context, *CPURequest) (*StatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Recover not implemented")
 }
 func (UnimplementedCPUServer) mustEmbedUnimplementedCPUServer() {}
 
@@ -342,20 +342,20 @@ func _CPU_Start_Handler(srv interface{}, ctx context.Context, dec func(interface
 	return interceptor(ctx, in, info, handler)
 }
 
-func _CPU_Stop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _CPU_Recover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CPURequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CPUServer).Stop(ctx, in)
+		return srv.(CPUServer).Recover(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1.CPU/Stop",
+		FullMethod: "/v1.CPU/Recover",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CPUServer).Stop(ctx, req.(*CPURequest))
+		return srv.(CPUServer).Recover(ctx, req.(*CPURequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -372,8 +372,8 @@ var CPU_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _CPU_Start_Handler,
 		},
 		{
-			MethodName: "Stop",
-			Handler:    _CPU_Stop_Handler,
+			MethodName: "Recover",
+			Handler:    _CPU_Recover_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -384,7 +384,7 @@ var CPU_ServiceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ServerClient interface {
-	Stop(ctx context.Context, in *ServerRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	Kill(ctx context.Context, in *ServerRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 }
 
 type serverClient struct {
@@ -395,9 +395,9 @@ func NewServerClient(cc grpc.ClientConnInterface) ServerClient {
 	return &serverClient{cc}
 }
 
-func (c *serverClient) Stop(ctx context.Context, in *ServerRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+func (c *serverClient) Kill(ctx context.Context, in *ServerRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
 	out := new(StatusResponse)
-	err := c.cc.Invoke(ctx, "/v1.Server/Stop", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/v1.Server/Kill", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -408,7 +408,7 @@ func (c *serverClient) Stop(ctx context.Context, in *ServerRequest, opts ...grpc
 // All implementations must embed UnimplementedServerServer
 // for forward compatibility
 type ServerServer interface {
-	Stop(context.Context, *ServerRequest) (*StatusResponse, error)
+	Kill(context.Context, *ServerRequest) (*StatusResponse, error)
 	mustEmbedUnimplementedServerServer()
 }
 
@@ -416,8 +416,8 @@ type ServerServer interface {
 type UnimplementedServerServer struct {
 }
 
-func (UnimplementedServerServer) Stop(context.Context, *ServerRequest) (*StatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Stop not implemented")
+func (UnimplementedServerServer) Kill(context.Context, *ServerRequest) (*StatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Kill not implemented")
 }
 func (UnimplementedServerServer) mustEmbedUnimplementedServerServer() {}
 
@@ -432,20 +432,20 @@ func RegisterServerServer(s grpc.ServiceRegistrar, srv ServerServer) {
 	s.RegisterService(&Server_ServiceDesc, srv)
 }
 
-func _Server_Stop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Server_Kill_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ServerRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServerServer).Stop(ctx, in)
+		return srv.(ServerServer).Kill(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1.Server/Stop",
+		FullMethod: "/v1.Server/Kill",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServerServer).Stop(ctx, req.(*ServerRequest))
+		return srv.(ServerServer).Kill(ctx, req.(*ServerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -458,8 +458,8 @@ var Server_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ServerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Stop",
-			Handler:    _Server_Stop_Handler,
+			MethodName: "Kill",
+			Handler:    _Server_Kill_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -471,7 +471,7 @@ var Server_ServiceDesc = grpc.ServiceDesc{
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type NetworkClient interface {
 	Start(ctx context.Context, in *NetworkRequest, opts ...grpc.CallOption) (*StatusResponse, error)
-	Stop(ctx context.Context, in *NetworkRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	Recover(ctx context.Context, in *NetworkRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 }
 
 type networkClient struct {
@@ -491,9 +491,9 @@ func (c *networkClient) Start(ctx context.Context, in *NetworkRequest, opts ...g
 	return out, nil
 }
 
-func (c *networkClient) Stop(ctx context.Context, in *NetworkRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+func (c *networkClient) Recover(ctx context.Context, in *NetworkRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
 	out := new(StatusResponse)
-	err := c.cc.Invoke(ctx, "/v1.Network/Stop", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/v1.Network/Recover", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -505,7 +505,7 @@ func (c *networkClient) Stop(ctx context.Context, in *NetworkRequest, opts ...gr
 // for forward compatibility
 type NetworkServer interface {
 	Start(context.Context, *NetworkRequest) (*StatusResponse, error)
-	Stop(context.Context, *NetworkRequest) (*StatusResponse, error)
+	Recover(context.Context, *NetworkRequest) (*StatusResponse, error)
 	mustEmbedUnimplementedNetworkServer()
 }
 
@@ -516,8 +516,8 @@ type UnimplementedNetworkServer struct {
 func (UnimplementedNetworkServer) Start(context.Context, *NetworkRequest) (*StatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
 }
-func (UnimplementedNetworkServer) Stop(context.Context, *NetworkRequest) (*StatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Stop not implemented")
+func (UnimplementedNetworkServer) Recover(context.Context, *NetworkRequest) (*StatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Recover not implemented")
 }
 func (UnimplementedNetworkServer) mustEmbedUnimplementedNetworkServer() {}
 
@@ -550,20 +550,20 @@ func _Network_Start_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Network_Stop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Network_Recover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(NetworkRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(NetworkServer).Stop(ctx, in)
+		return srv.(NetworkServer).Recover(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1.Network/Stop",
+		FullMethod: "/v1.Network/Recover",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NetworkServer).Stop(ctx, req.(*NetworkRequest))
+		return srv.(NetworkServer).Recover(ctx, req.(*NetworkRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -580,8 +580,8 @@ var Network_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Network_Start_Handler,
 		},
 		{
-			MethodName: "Stop",
-			Handler:    _Network_Stop_Handler,
+			MethodName: "Recover",
+			Handler:    _Network_Recover_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

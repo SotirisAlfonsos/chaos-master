@@ -39,53 +39,53 @@ func main() {
 	time.Sleep(30 * time.Second)
 
 	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Start non existing service ------------")
-	status = serviceFailure("test", "start")
+	status = serviceFailure("test", "recover")
 	if status != http.StatusBadRequest {
-		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("should not be able to start service {test} with status %d", status))
+		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("should not be able to recover service {test} with status %d", status))
 		os.Exit(1)
 	}
 
 	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Start non existing container ------------")
-	status = dockerFailure("test", "start")
+	status = dockerFailure("test", "recover")
 	if status != http.StatusBadRequest {
-		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("should not be able to start service {test} with status %d", status))
+		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("should not be able to recover conatiner {test} with status %d", status))
 		os.Exit(1)
 	}
 
-	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Stop service------------")
-	status = serviceFailure("simple", "stop")
+	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Kill service------------")
+	status = serviceFailure("simple", "kill")
 	if status != http.StatusOK {
-		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("failed to stop service {simple} with status %d", status))
+		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("failed to kill service {simple} with status %d", status))
 		os.Exit(1)
 	}
 
-	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Stop container ------------")
-	status = dockerFailure("zookeeper", "stop")
+	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Kill container ------------")
+	status = dockerFailure("zookeeper", "kill")
 	if status != http.StatusOK {
-		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("failed to stop container {zookeeper} with status %d", status))
+		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("failed to kill container {zookeeper} with status %d", status))
 		os.Exit(1)
 	}
 
 	recoverAll()
 
-	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Stop container ------------")
-	status = dockerFailure("zookeeper", "stop")
+	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Kill container ------------")
+	status = dockerFailure("zookeeper", "kill")
 	if status != http.StatusOK {
-		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("failed to stop container {zookeeper} with status %d", status))
+		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("failed to kill container {zookeeper} with status %d", status))
 		os.Exit(1)
 	}
 
-	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Stop CPU that has already recovered ------------")
-	status = cpuFailure("stop")
+	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Recover CPU that has already recovered ------------")
+	status = cpuFailure("recover")
 	if status != http.StatusInternalServerError {
-		_ = level.Error(loggers.ErrLogger).Log("err", "should not be able to start already recovered cpu failure")
+		_ = level.Error(loggers.ErrLogger).Log("err", "should not be able to recover already recovered cpu failure")
 		os.Exit(1)
 	}
 
 	recoverAll()
 
-	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Stop server ------------")
-	serverFailure()
+	//_ = level.Info(loggers.OutLogger).Log("msg", "------------ Kill server ------------")
+	//serverFailure()
 
 	defer cleanUp()
 
@@ -93,29 +93,29 @@ func main() {
 }
 
 func setUp() {
-	status := serviceFailure("simple", "start")
+	status := serviceFailure("simple", "recover")
 	if status != http.StatusOK {
-		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("failed to start service {simple} with status %d", status))
+		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("failed to recover service {simple} with status %d", status))
 		os.Exit(1)
 	}
 
-	status = dockerFailure("zookeeper", "start")
+	status = dockerFailure("zookeeper", "recover")
 	if status != http.StatusOK {
-		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("failed to start container {zookeeper} with status %d", status))
+		_ = level.Error(loggers.ErrLogger).Log("err", fmt.Sprintf("failed to recover container {zookeeper} with status %d", status))
 		os.Exit(1)
 	}
 }
 
 func cleanUp() {
-	status := serviceFailure("simple", "stop")
+	status := serviceFailure("simple", "kill")
 	if status != http.StatusOK {
-		_ = level.Error(loggers.ErrLogger).Log("err", "failed to stop service {simple}")
+		_ = level.Error(loggers.ErrLogger).Log("err", "failed to kill service {simple}")
 		os.Exit(1)
 	}
 
-	status = dockerFailure("zookeeper", "stop")
+	status = dockerFailure("zookeeper", "kill")
 	if status != http.StatusOK {
-		_ = level.Error(loggers.ErrLogger).Log("err", "failed to stop container {zookeeper}")
+		_ = level.Error(loggers.ErrLogger).Log("err", "failed to kill container {zookeeper}")
 		os.Exit(1)
 	}
 }
@@ -185,7 +185,7 @@ func serverFailure() {
 		Job:    "server_injection",
 		Target: "127.0.0.1:8081",
 	}
-	err := serverAction("stop", request)
+	err := serverAction("kill", request)
 	if err != nil {
 		_ = level.Error(loggers.ErrLogger).Log("err", err)
 		os.Exit(1)

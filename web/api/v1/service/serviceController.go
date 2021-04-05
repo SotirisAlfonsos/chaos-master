@@ -52,21 +52,21 @@ func NewServiceController(
 type action int
 
 const (
-	stop action = iota
-	start
+	kill action = iota
+	recoverService
 	notImplemented
 )
 
 func (a action) String() string {
-	return [...]string{"stop", "start"}[a]
+	return [...]string{"kill", "recover"}[a]
 }
 
 func toActionEnum(value string) (action, error) {
 	switch value {
-	case start.String():
-		return start, nil
-	case stop.String():
-		return stop, nil
+	case recoverService.String():
+		return recoverService, nil
+	case kill.String():
+		return kill, nil
 	}
 	return notImplemented, errors.New(fmt.Sprintf("The action {%s} is not supported", value))
 }
@@ -89,11 +89,11 @@ func newServiceRequest(details *RequestPayload) *v1.ServiceRequest {
 // @Tags Failure injections
 // @Accept json
 // @Produce json
-// @Param action query string true "Specify to perform a start or a stop on the specified service"
+// @Param action query string true "Specify to perform a recover or a kill on the specified service" Enums(kill, recover)
 // @Param requestPayload body RequestPayload true "Specify the job name, service name and target"
 // @Success 200 {object} response.Payload
-// @Failure 400 {object} response.Payload
-// @Failure 500 {object} response.Payload
+// @Failure 400 {string} http.Error
+// @Failure 500 {string} http.Error
 // @Router /service [post]
 func (s *SController) ServiceAction(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -162,17 +162,18 @@ func (s *SController) performAction(
 ) (string, error) {
 	var statusResponse *v1.StatusResponse
 	var err error
+	connection := s.connectionPool[request.Target].connection
 
-	serviceClient, err := s.connectionPool[request.Target].connection.GetServiceClient()
+	serviceClient, err := connection.GetServiceClient()
 	if err != nil {
 		return "", errors.Wrap(err, fmt.Sprintf("Can not get service connection from target {%s}", request.Target))
 	}
 
 	switch action {
-	case start:
-		statusResponse, err = serviceClient.Start(ctx, newServiceRequest(request))
-	case stop:
-		statusResponse, err = serviceClient.Stop(ctx, newServiceRequest(request))
+	case recoverService:
+		statusResponse, err = serviceClient.Recover(ctx, newServiceRequest(request))
+	case kill:
+		statusResponse, err = serviceClient.Kill(ctx, newServiceRequest(request))
 	}
 
 	switch {
@@ -181,7 +182,7 @@ func (s *SController) performAction(
 	case statusResponse.Status != v1.StatusResponse_SUCCESS:
 		return "", errors.New(fmt.Sprintf("Failure response from target {%s}", request.Target))
 	default:
-		if err = s.updateCache(serviceClient, request, action); err != nil {
+		if err = s.updateCache(connection, request, action); err != nil {
 			_ = level.Error(s.loggers.ErrLogger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
 		}
 	}
@@ -189,19 +190,23 @@ func (s *SController) performAction(
 	return fmt.Sprintf("Response from target {%s}, {%s}, {%s}", request.Target, statusResponse.Message, statusResponse.Status), nil
 }
 
-func (s *SController) updateCache(serviceClient v1.ServiceClient, request *RequestPayload, action action) error {
+func (s *SController) updateCache(connection network.Connection, request *RequestPayload, action action) error {
 	key := cache.Key{
 		Job:    request.Job,
 		Target: request.Target,
 	}
 
 	switch action {
-	case start:
+	case recoverService:
 		s.cache.Delete(key)
 		return nil
-	case stop:
+	case kill:
 		recoveryFunc := func() (*v1.StatusResponse, error) {
-			return serviceClient.Start(context.Background(), newServiceRequest(request))
+			serviceClient, err := connection.GetServiceClient()
+			if err != nil {
+				return nil, errors.New(fmt.Sprintf("Could not recover service for job {%s} and target {%s}", request.Job, request.Target))
+			}
+			return serviceClient.Recover(context.Background(), &v1.ServiceRequest{Name: request.ServiceName})
 		}
 		s.cache.Set(key, recoveryFunc)
 		return nil

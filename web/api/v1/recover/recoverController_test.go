@@ -56,7 +56,7 @@ func TestRecoverAllRequestSuccess(t *testing.T) { //nolint:dupl
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverAll: true},
 			}},
-			expected: &expectedResult{cacheSize: 0, response: okResponse("SUCCESS", "SUCCESS")},
+			expected: &expectedResult{cacheSize: 0, response: recoverResponse(200, "SUCCESS", "SUCCESS")},
 		},
 		{
 			message: "Successfully recover one item from the cache and record failure on the rest",
@@ -68,7 +68,7 @@ func TestRecoverAllRequestSuccess(t *testing.T) { //nolint:dupl
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverAll: true},
 			}},
-			expected: &expectedResult{cacheSize: 2, response: okResponse("SUCCESS", "FAILURE", "FAILURE")},
+			expected: &expectedResult{cacheSize: 2, response: recoverResponse(500, "SUCCESS", "FAILURE", "FAILURE")},
 		},
 		{
 			message:    "Should not do anything and return ok for cache already empty",
@@ -76,7 +76,7 @@ func TestRecoverAllRequestSuccess(t *testing.T) { //nolint:dupl
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverAll: true},
 			}},
-			expected: &expectedResult{cacheSize: 0, response: okResponse()},
+			expected: &expectedResult{cacheSize: 0, response: recoverResponse(200)},
 		},
 	}
 
@@ -97,7 +97,7 @@ func TestRecoverJobRequestSuccess(t *testing.T) { //nolint:dupl
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverJob: "job name"},
 			}},
-			expected: &expectedResult{cacheSize: 1, response: okResponse("SUCCESS", "SUCCESS")},
+			expected: &expectedResult{cacheSize: 1, response: recoverResponse(200, "SUCCESS", "SUCCESS")},
 		},
 		{
 			message: "Successfully recover one item from the cache and record failure on the rest for job {job name}, while not removing other jobs",
@@ -110,7 +110,7 @@ func TestRecoverJobRequestSuccess(t *testing.T) { //nolint:dupl
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverJob: "job name"},
 			}},
-			expected: &expectedResult{cacheSize: 3, response: okResponse("SUCCESS", "FAILURE", "FAILURE")},
+			expected: &expectedResult{cacheSize: 3, response: recoverResponse(500, "SUCCESS", "FAILURE", "FAILURE")},
 		},
 		{
 			message: "Should not do anything and return ok for job {job name} not in cache",
@@ -120,7 +120,7 @@ func TestRecoverJobRequestSuccess(t *testing.T) { //nolint:dupl
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverJob: "job name"},
 			}},
-			expected: &expectedResult{cacheSize: 1, response: okResponse()},
+			expected: &expectedResult{cacheSize: 1, response: recoverResponse(200)},
 		},
 	}
 
@@ -141,7 +141,7 @@ func TestRecoverTargetRequestSuccess(t *testing.T) { //nolint:dupl
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverTarget: "127.0.0.1"},
 			}},
-			expected: &expectedResult{cacheSize: 1, response: okResponse("SUCCESS", "SUCCESS")},
+			expected: &expectedResult{cacheSize: 1, response: recoverResponse(200, "SUCCESS", "SUCCESS")},
 		},
 		{
 			message: "Successfully recover one item from the cache and record failure on the rest for target {127.0.0.1}, while not removing other jobs",
@@ -154,7 +154,7 @@ func TestRecoverTargetRequestSuccess(t *testing.T) { //nolint:dupl
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverTarget: "127.0.0.1"},
 			}},
-			expected: &expectedResult{cacheSize: 3, response: okResponse("SUCCESS", "FAILURE", "FAILURE")},
+			expected: &expectedResult{cacheSize: 3, response: recoverResponse(500, "SUCCESS", "FAILURE", "FAILURE")},
 		},
 		{
 			message: "Should not do anything and return ok for target {127.0.0.1} not in cache",
@@ -164,7 +164,7 @@ func TestRecoverTargetRequestSuccess(t *testing.T) { //nolint:dupl
 			alerts: []*Alert{{
 				Status: "firing", Labels: Labels{RecoverTarget: "127.0.0.1"},
 			}},
-			expected: &expectedResult{cacheSize: 1, response: okResponse()},
+			expected: &expectedResult{cacheSize: 1, response: recoverResponse(200)},
 		},
 	}
 
@@ -188,7 +188,7 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 				{Status: "resolved", Labels: Labels{RecoverAll: true}},
 				{Status: "resolved", Labels: Labels{RecoverJob: "job name"}},
 			},
-			expected: &expectedResult{cacheSize: 1, response: okResponse("SUCCESS", "SUCCESS")},
+			expected: &expectedResult{cacheSize: 1, response: recoverResponse(200, "SUCCESS", "SUCCESS")},
 		},
 		{
 			message: "Should not do anything for resolved alerts, no items should be removed from cache",
@@ -201,7 +201,7 @@ func TestRecoverRequestForNotFiringAlerts(t *testing.T) { //nolint:dupl
 				{Status: "resolved", Labels: Labels{RecoverAll: true}},
 				{Status: "resolved", Labels: Labels{RecoverJob: "job name"}},
 			},
-			expected: &expectedResult{cacheSize: 2, response: okResponse()},
+			expected: &expectedResult{cacheSize: 2, response: recoverResponse(200)},
 		},
 		{
 			message: "Should not do anything for unknown alert status, no items should be removed from cache",
@@ -242,14 +242,14 @@ func assertSuccessfulRecovery(t *testing.T, dataItem TestData) {
 	})
 }
 
-func okResponse(statuses ...string) *responseWrapper {
+func recoverResponse(status int, statuses ...string) *responseWrapper {
 	recoverMessages := make([]*response.RecoverMessage, 0, len(statuses))
 	for _, status := range statuses {
 		recoverMessages = append(recoverMessages, &response.RecoverMessage{Status: status})
 	}
 	return &responseWrapper{
 		recoverMessages: recoverMessages,
-		status:          200,
+		status:          status,
 	}
 }
 
@@ -318,7 +318,7 @@ func post(requestBody []byte, url string) (int, string, []*response.RecoverMessa
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 		b, _ := ioutil.ReadAll(resp.Body)
 		return resp.StatusCode, string(b), nil, nil
 	}

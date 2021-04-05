@@ -14,8 +14,8 @@ github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 h1:d+Bc7a5rLufV
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
 github.com/Shopify/sarama v1.19.0/go.mod h1:FVkBWblsNy7DGZRfXLU0O9RCGt5g3g3yEuWXgklEdEo=
 github.com/Shopify/toxiproxy v2.1.4+incompatible/go.mod h1:OXgGpZ6Cli1/URJOF1DMxUHB2q5Ap20/P/eIdh4G0pI=
-github.com/SotirisAlfonsos/chaos-bot v0.0.0-20210306232632-7e89674dc52a h1:Sw7a+1v9BU9RpqwARCAJ4Jx5Yv9FaP8cIFoZute+jmk=
-github.com/SotirisAlfonsos/chaos-bot v0.0.0-20210306232632-7e89674dc52a/go.mod h1:HtDxbgoit5gTCS9Bz/PMIj1Hg16K/IRw+j8/frfAf3k=
+github.com/SotirisAlfonsos/chaos-bot v0.0.0-20210405132114-f39ceab54afb h1:NrZr2+4GUkZX6U9n9HyDUH6skAPb7Km9zko9HSbid9c=
+github.com/SotirisAlfonsos/chaos-bot v0.0.0-20210405132114-f39ceab54afb/go.mod h1:HtDxbgoit5gTCS9Bz/PMIj1Hg16K/IRw+j8/frfAf3k=
 github.com/SotirisAlfonsos/chaos-master v0.0.0-20200601181005-5bd31b7d913e/go.mod h1:XYFlu0gB3sLbHcW1RrXZBvtpKtl21Lqx6kZtUlJ/jyI=
 github.com/SotirisAlfonsos/chaos-master v0.0.0-20200829191619-be86feb4a4c9/go.mod h1:VJBhhqUcpuMKRtSApdeoIfxb+6rN7i1Ynp1kM+zIKdo=
 github.com/SotirisAlfonsos/chaos-slave v0.0.0-20200606230330-b9ec8b66c4a0/go.mod h1:B6pRN4d/gH49hAJoNJETg7ipww+qtoaIdTm1UsV1wAs=
@@ -168,6 +168,7 @@ github.com/gorilla/mux v1.8.0/go.mod h1:DVbg23sWSpFRCP0SfiEN6jmj59UnW/n46BH5rLB7
 github.com/gorilla/websocket v0.0.0-20170926233335-4201258b820c/go.mod h1:E7qHFY5m1UJ88s3WnNqhKjPHQ0heANvMoAMk2YaljkQ=
 github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4/go.mod h1:FiyG127CGDf3tlThmgyCl78X/SZQqEOJBCDaAfeWzPs=
 github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0/go.mod h1:8NvIoxWQoOIhqOTXgfV/d3M/q6VIi02HzZEHgUlZvzk=
+github.com/grpc-ecosystem/grpc-gateway v1.9.5 h1:UImYN5qQ8tuGpGE16ZmjvcTtTw24zw1QAp/SlnNrZhI=
 github.com/grpc-ecosystem/grpc-gateway v1.9.5/go.mod h1:vNeuVxBJEsws4ogUvrchl83t/GYV9WGTSLVdBhOQFDY=
 github.com/hashicorp/consul/api v1.3.0/go.mod h1:MmDNSzIMUjNpY/mQ398R4bk2FnqQLoPndWW5VkKPlCE=
 github.com/hashicorp/consul/sdk v0.3.0/go.mod h1:VKf9jXwCTEY1QZP2MOLRhb5i/I/ssyNV1vwHyQBF0x8=

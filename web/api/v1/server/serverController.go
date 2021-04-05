@@ -54,17 +54,17 @@ func NewServerController(
 	}
 }
 
-// CalcExample godoc
+// ServerAction godoc
 // @Summary Inject Server failures
-// @Description Perform Server fault injection. Supports action to stop the server specified. A shutdown will be executed after 1 minute.
+// @Description Perform Server fault injection. Supports action to kill the server specified. A shutdown will be executed after 1 minute.
 // @Tags Failure injections
 // @Accept json
 // @Produce json
-// @Param action query string true "Specify to perform a stop action on the server"
+// @Param action query string true "Specify to perform a kill action on the server" Enums(kill)
 // @Param requestPayload body RequestPayload true "Specify the job name and target"
 // @Success 200 {object} response.Payload
-// @Failure 400 {object} response.Payload
-// @Failure 500 {object} response.Payload
+// @Failure 400 {string} http.Error
+// @Failure 500 {string} http.Error
 // @Router /server [post]
 func (sc *SController) ServerAction(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -115,8 +115,8 @@ func (sc *SController) performAction(
 		return "", errors.Wrap(err, fmt.Sprintf("Can not get server connection from target {%s}", request.Target))
 	}
 
-	if action == stop {
-		statusResponse, err = serverClient.Stop(ctx, newServerRequest())
+	if action == kill {
+		statusResponse, err = serverClient.Kill(ctx, newServerRequest())
 	}
 
 	switch {
@@ -156,18 +156,18 @@ func checkIfTargetExistsForJob(job *config.Job, requestTarget string) bool {
 type action int
 
 const (
-	stop action = iota
+	kill action = iota
 	notImplemented
 )
 
 func (a action) String() string {
-	return [...]string{"stop"}[a]
+	return [...]string{"kill"}[a]
 }
 
 func toActionEnum(value string) (action, error) {
 	switch value {
-	case stop.String():
-		return stop, nil
+	case kill.String():
+		return kill, nil
 	}
 	return notImplemented, errors.New(fmt.Sprintf("The action {%s} is not supported", value))
 }

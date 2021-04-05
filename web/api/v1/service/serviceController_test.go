@@ -47,10 +47,10 @@ type responseWrapper struct {
 	err     error
 }
 
-func TestStartServiceSuccess(t *testing.T) {
+func TestRecoverServiceSuccess(t *testing.T) {
 	dataItems := []TestData{
 		{
-			message: "Successfully start single container with specific job, name and target",
+			message: "Successfully recover single service with specific job, name and target",
 			jobMap: map[string]*config.Job{
 				"job name":           newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
 				"job different name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
@@ -63,7 +63,7 @@ func TestStartServiceSuccess(t *testing.T) {
 			expected:       &expectedResult{cacheSize: 0, response: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 		{
-			message: "Successfully start single container with specific job, name and target and remove it from the cache",
+			message: "Successfully recover single service with specific job, name and target and remove it from the cache",
 			jobMap: map[string]*config.Job{
 				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
 			},
@@ -79,14 +79,14 @@ func TestStartServiceSuccess(t *testing.T) {
 	}
 
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "start")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 }
 
-func TestStopServiceSuccess(t *testing.T) {
+func TestKillServiceSuccess(t *testing.T) {
 	dataItems := []TestData{
 		{
-			message: "Successfully stop single service with specific job, name and target and add it in cache",
+			message: "Successfully kill single service with specific job, name and target and add it in cache",
 			jobMap: map[string]*config.Job{
 				"job name":           newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
 				"job different name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
@@ -102,7 +102,7 @@ func TestStopServiceSuccess(t *testing.T) {
 			expected:       &expectedResult{cacheSize: 2, response: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 		{
-			message: "Successfully stop single service with specific job, name and target and dont add it in cache if already exists",
+			message: "Successfully kill single service with specific job, name and target and dont add it in cache if already exists",
 			jobMap: map[string]*config.Job{
 				"job name": newServiceJob("service name", "127.0.0.1", "127.0.0.2"),
 			},
@@ -118,7 +118,7 @@ func TestStopServiceSuccess(t *testing.T) {
 	}
 
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "stop")
+		assertActionPerformed(t, dataItem, "kill")
 	}
 }
 
@@ -163,14 +163,14 @@ func TestServiceActionOneOfJobContainerNameTargetDoesNotExist(t *testing.T) {
 		},
 	}
 
-	t.Log("Action start")
+	t.Log("Action recover")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "start")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 
-	t.Log("Action stop")
+	t.Log("Action kill")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "stop")
+		assertActionPerformed(t, dataItem, "kill")
 	}
 }
 
@@ -202,14 +202,14 @@ func TestServiceActionFailure(t *testing.T) {
 		},
 	}
 
-	t.Log("Action start")
+	t.Log("Action recover")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "start")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 
-	t.Log("Action stop")
+	t.Log("Action kill")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "stop")
+		assertActionPerformed(t, dataItem, "kill")
 	}
 }
 
@@ -228,9 +228,9 @@ func TestServiceActionWithNoGrpcConnectionToTarget(t *testing.T) {
 		},
 	}
 
-	t.Log("Action start")
+	t.Log("Action recover")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "start")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 }
 

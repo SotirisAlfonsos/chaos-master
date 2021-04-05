@@ -34,21 +34,21 @@ type dConnection struct {
 type action int
 
 const (
-	stop action = iota
-	start
+	kill action = iota
+	recoverContainer
 	notImplemented
 )
 
 func (a action) String() string {
-	return [...]string{"stop", "start"}[a]
+	return [...]string{"kill", "recover"}[a]
 }
 
 func toActionEnum(value string) (action, error) {
 	switch value {
-	case start.String():
-		return start, nil
-	case stop.String():
-		return stop, nil
+	case recoverContainer.String():
+		return recoverContainer, nil
+	case kill.String():
+		return kill, nil
 	}
 	return notImplemented, errors.New(fmt.Sprintf("The action {%s} is not supported", value))
 }
@@ -91,12 +91,12 @@ func newDockerRequest(details *RequestPayload) *v1.DockerRequest {
 // @Tags Failure injections
 // @Accept json
 // @Produce json
-// @Param do query string false "Specify to perform action for container on random target"
-// @Param action query string true "Specify to perform a start or a stop on the specified container"
+// @Param do query string false "Specify to perform action for container on random target" Enums(random)
+// @Param action query string true "Specify to perform a recover or a kill on the specified container" Enums(kill, recover)
 // @Param requestPayload body RequestPayload true "Specify the job name, container name and target"
 // @Success 200 {object} response.Payload
-// @Failure 400 {object} response.Payload
-// @Failure 500 {object} response.Payload
+// @Failure 400 {string} http.Error
+// @Failure 500 {string} http.Error
 // @Router /docker [post]
 func (d *DController) DockerAction(w http.ResponseWriter, r *http.Request) {
 	do := r.FormValue("do")
@@ -245,17 +245,18 @@ func (d *DController) performAction(
 ) (string, error) {
 	var statusResponse *v1.StatusResponse
 	var err error
+	connection := d.connectionPool[request.Target].connection
 
-	dockerClient, err := d.connectionPool[request.Target].connection.GetDockerClient()
+	dockerClient, err := connection.GetDockerClient()
 	if err != nil {
 		return "", errors.Wrap(err, fmt.Sprintf("Can not get docker connection from target {%s}", request.Target))
 	}
 
 	switch action {
-	case start:
-		statusResponse, err = dockerClient.Start(ctx, newDockerRequest(request))
-	case stop:
-		statusResponse, err = dockerClient.Stop(ctx, newDockerRequest(request))
+	case recoverContainer:
+		statusResponse, err = dockerClient.Recover(ctx, newDockerRequest(request))
+	case kill:
+		statusResponse, err = dockerClient.Kill(ctx, newDockerRequest(request))
 	}
 
 	switch {
@@ -264,7 +265,7 @@ func (d *DController) performAction(
 	case statusResponse.Status != v1.StatusResponse_SUCCESS:
 		return "", errors.New(fmt.Sprintf("Failure response from target {%s}", request.Target))
 	default:
-		if err = d.updateCache(dockerClient, request, action); err != nil {
+		if err = d.updateCache(connection, request, action); err != nil {
 			_ = level.Error(d.loggers.ErrLogger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
 		}
 	}
@@ -287,19 +288,23 @@ func (d *DController) handleBotResponse(
 	}
 }
 
-func (d *DController) updateCache(dockerClient v1.DockerClient, request *RequestPayload, action action) error {
+func (d *DController) updateCache(connection network.Connection, request *RequestPayload, action action) error {
 	key := cache.Key{
 		Job:    request.Job,
 		Target: request.Target,
 	}
 
 	switch action {
-	case start:
+	case recoverContainer:
 		d.cache.Delete(key)
 		return nil
-	case stop:
+	case kill:
 		recoveryFunc := func() (*v1.StatusResponse, error) {
-			return dockerClient.Start(context.Background(), newDockerRequest(request))
+			dockerClient, err := connection.GetDockerClient()
+			if err != nil {
+				return nil, errors.New(fmt.Sprintf("Could not recover container for job {%s} and target {%s}", request.Job, request.Target))
+			}
+			return dockerClient.Recover(context.Background(), &v1.DockerRequest{Name: request.Container})
 		}
 		d.cache.Set(key, recoveryFunc)
 		return nil

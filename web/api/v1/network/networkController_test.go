@@ -83,10 +83,10 @@ func TestStartNetworkSuccess(t *testing.T) {
 	}
 }
 
-func TestStopNetworkSuccess(t *testing.T) {
+func TestRecoverNetworkSuccess(t *testing.T) {
 	dataItems := []TestData{
 		{
-			message: "Successfully stop network injection with specific job and target and dont change anything with the cache",
+			message: "Successfully recover network injection with specific job and target and dont change anything with the cache",
 			jobMap: map[string]*config.Job{
 				"job name":           newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
 				"job different name": newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
@@ -102,7 +102,7 @@ func TestStopNetworkSuccess(t *testing.T) {
 			expected:       &expectedResult{cacheSize: 1, response: okResponse("Response from target {127.0.0.1}, {}, {SUCCESS}")},
 		},
 		{
-			message: "Successfully stop network injection with specific job and target and remove it from the cache",
+			message: "Successfully recover network injection with specific job and target and remove it from the cache",
 			jobMap: map[string]*config.Job{
 				"job name": newNetworkJob("network name", "127.0.0.1", "127.0.0.2"),
 			},
@@ -118,7 +118,7 @@ func TestStopNetworkSuccess(t *testing.T) {
 	}
 
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "stop")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 }
 
@@ -154,9 +154,9 @@ func TestNetworkActionOneOfJobContainerNameTargetDoesNotExist(t *testing.T) {
 		assertActionPerformed(t, dataItem, "start")
 	}
 
-	t.Log("Action stop")
+	t.Log("Action recover")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "stop")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 }
 
@@ -193,9 +193,9 @@ func TestNetworkActionFailure(t *testing.T) {
 		assertActionPerformed(t, dataItem, "start")
 	}
 
-	t.Log("Action stop")
+	t.Log("Action recover")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "stop")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 }
 

@@ -118,7 +118,7 @@ func TestStopServiceSuccess(t *testing.T) {
 	}
 
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "stop")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 }
 
@@ -157,9 +157,9 @@ func TestCPUActionOneOfJobTargetDoesNotExist(t *testing.T) {
 		assertActionPerformed(t, dataItem, "start")
 	}
 
-	t.Log("Action stop")
+	t.Log("Action recover")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "stop")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 }
 
@@ -196,9 +196,9 @@ func TestCPUActionFailure(t *testing.T) {
 		assertActionPerformed(t, dataItem, "start")
 	}
 
-	t.Log("Action stop")
+	t.Log("Action recover")
 	for _, dataItem := range dataItems {
-		assertActionPerformed(t, dataItem, "stop")
+		assertActionPerformed(t, dataItem, "recover")
 	}
 }
 

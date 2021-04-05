@@ -69,7 +69,7 @@ definitions:
       recoverTarget:
         type: string
     type: object
-  recover.requestPayload:
+  recover.RequestPayload:
     properties:
       alerts:
         items:
@@ -78,8 +78,6 @@ definitions:
     type: object
   response.Payload:
     properties:
-      error:
-        type: string
       message:
         type: string
       status:
@@ -130,10 +128,13 @@ paths:
     post:
       consumes:
       - application/json
-      description: Perform CPU spike injection. Provide a percentage that is proportionate
-        to your logical CPUs.
+      description: Perform CPU spike injection. Provide a percentage and the cpu usage
+        will increase based on it
       parameters:
-      - description: Specify to perform a start or a stop for the CPU injection
+      - description: Specify to perform a start or a recover for the CPU injection
+        enum:
+        - start
+        - recover
         in: query
         name: action
         required: true
@@ -154,11 +155,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.Payload'
+            type: string
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/response.Payload'
+            type: string
       summary: Inject CPU failures
       tags:
       - Failure injections
@@ -170,10 +171,15 @@ paths:
         you do not have to provide a target
       parameters:
       - description: Specify to perform action for container on random target
+        enum:
+        - random
         in: query
         name: do
         type: string
-      - description: Specify to perform a start or a stop on the specified container
+      - description: Specify to perform a recover or a kill on the specified container
+        enum:
+        - kill
+        - recover
         in: query
         name: action
         required: true
@@ -194,11 +200,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.Payload'
+            type: string
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/response.Payload'
+            type: string
       summary: Inject docker failures
       tags:
       - Failure injections
@@ -227,7 +233,10 @@ paths:
       - application/json
       description: Start and stop network failures
       parameters:
-      - description: Specify to perform a start or a stop for a network failure injection
+      - description: Specify to perform a start or recover for a network failure injection
+        enum:
+        - start
+        - recover
         in: query
         name: action
         required: true
@@ -249,11 +258,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.Payload'
+            type: string
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/response.Payload'
+            type: string
       summary: Inject network failures
       tags:
       - Failure injections
@@ -265,10 +274,10 @@ paths:
       parameters:
       - description: Create request payload that contains the recovery details
         in: body
-        name: requestPayload
+        name: RequestPayload
         required: true
         schema:
-          $ref: '#/definitions/recover.requestPayload'
+          $ref: '#/definitions/recover.RequestPayload'
       produces:
       - application/json
       responses:
@@ -279,7 +288,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.RecoverResponsePayload'
+            type: string
       summary: recover from failures
       tags:
       - Recover
@@ -287,10 +296,12 @@ paths:
     post:
       consumes:
       - application/json
-      description: Perform Server fault injection. Supports action to stop the server
+      description: Perform Server fault injection. Supports action to kill the server
         specified. A shutdown will be executed after 1 minute.
       parameters:
-      - description: Specify to perform a stop action on the server
+      - description: Specify to perform a kill action on the server
+        enum:
+        - kill
         in: query
         name: action
         required: true
@@ -311,11 +322,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.Payload'
+            type: string
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/response.Payload'
+            type: string
       summary: Inject Server failures
       tags:
       - Failure injections
@@ -325,7 +336,10 @@ paths:
       - application/json
       description: Perform start or stop action on a service
       parameters:
-      - description: Specify to perform a start or a stop on the specified service
+      - description: Specify to perform a recover or a kill on the specified service
+        enum:
+        - kill
+        - recover
         in: query
         name: action
         required: true
@@ -346,11 +360,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.Payload'
+            type: string
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/response.Payload'
+            type: string
       summary: Inject service failures
       tags:
       - Failure injections

@@ -32,21 +32,21 @@ type cConnection struct {
 type action int
 
 const (
-	stop action = iota
+	recoverFailure action = iota
 	start
 	notImplemented
 )
 
 func (a action) String() string {
-	return [...]string{"stop", "start"}[a]
+	return [...]string{"recover", "start"}[a]
 }
 
 func toActionEnum(value string) (action, error) {
 	switch value {
 	case start.String():
 		return start, nil
-	case stop.String():
-		return stop, nil
+	case recoverFailure.String():
+		return recoverFailure, nil
 	}
 	return notImplemented, errors.New(fmt.Sprintf("The action {%s} is not supported", value))
 }
@@ -83,19 +83,17 @@ func newCPURequest(details *RequestPayload) *v1.CPURequest {
 	}
 }
 
-// CalcExample godoc
+// CPUAction godoc
 // @Summary Inject CPU failures
-// @Description Perform CPU spike injection. Provide a percentage that is proportionate to your logical CPUs.
-// E.g. With 4 logical CPUs if you want to inject 40% CPU failure we calculate that as ( numCpu * percentage / 100 )
-// so we will block 1 CPU, effectively injecting failure 25%
+// @Description Perform CPU spike injection. Provide a percentage and the cpu usage will increase based on it
 // @Tags Failure injections
 // @Accept json
 // @Produce json
-// @Param action query string true "Specify to perform a start or a stop for the CPU injection"
+// @Param action query string true "Specify to perform a start or a recover for the CPU injection" Enums(start, recover)
 // @Param requestPayload body RequestPayload true "Specify the job name, percentage and target"
 // @Success 200 {object} response.Payload
-// @Failure 400 {object} response.Payload
-// @Failure 500 {object} response.Payload
+// @Failure 400 {string} http.Error
+// @Failure 500 {string} http.Error
 // @Router /cpu [post]
 func (c *CController) CPUAction(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -164,8 +162,9 @@ func (c *CController) performAction(
 ) (string, error) {
 	var statusResponse *v1.StatusResponse
 	var err error
+	connection := c.connectionPool[request.Target].connection
 
-	cpuClient, err := c.connectionPool[request.Target].connection.GetCPUClient()
+	cpuClient, err := connection.GetCPUClient()
 	if err != nil {
 		return "", errors.Wrap(err, fmt.Sprintf("Can not get cpu connection for target {%s}", request.Target))
 	}
@@ -173,8 +172,8 @@ func (c *CController) performAction(
 	switch action {
 	case start:
 		statusResponse, err = cpuClient.Start(ctx, newCPURequest(request))
-	case stop:
-		statusResponse, err = cpuClient.Stop(ctx, newCPURequest(request))
+	case recoverFailure:
+		statusResponse, err = cpuClient.Recover(ctx, newCPURequest(request))
 	}
 
 	switch {
@@ -183,7 +182,7 @@ func (c *CController) performAction(
 	case statusResponse.Status != v1.StatusResponse_SUCCESS:
 		return "", errors.New(fmt.Sprintf("Failure response from target {%s}", request.Target))
 	default:
-		if err = c.updateCache(cpuClient, request, action); err != nil {
+		if err = c.updateCache(connection, request, action); err != nil {
 			_ = level.Error(c.loggers.ErrLogger).Log("msg", fmt.Sprintf("Could not update cache for operation cpu injection %s", action), "err", err)
 		}
 	}
@@ -191,7 +190,7 @@ func (c *CController) performAction(
 	return fmt.Sprintf("Response from target {%s}, {%s}, {%s}", request.Target, statusResponse.Message, statusResponse.Status), nil
 }
 
-func (c *CController) updateCache(cpuClient v1.CPUClient, request *RequestPayload, action action) error {
+func (c *CController) updateCache(connection network.Connection, request *RequestPayload, action action) error {
 	key := cache.Key{
 		Job:    request.Job,
 		Target: request.Target,
@@ -200,11 +199,15 @@ func (c *CController) updateCache(cpuClient v1.CPUClient, request *RequestPayloa
 	switch action {
 	case start:
 		recoveryFunc := func() (*v1.StatusResponse, error) {
-			return cpuClient.Stop(context.Background(), newCPURequest(request))
+			cpuClient, err := connection.GetCPUClient()
+			if err != nil {
+				return nil, errors.New(fmt.Sprintf("Could not recover cpu failure for job {%s} and target {%s}", request.Job, request.Target))
+			}
+			return cpuClient.Recover(context.Background(), &v1.CPURequest{})
 		}
 		c.cache.Set(key, recoveryFunc)
 		return nil
-	case stop:
+	case recoverFailure:
 		c.cache.Delete(key)
 		return nil
 	default:

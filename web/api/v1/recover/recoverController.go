@@ -27,15 +27,15 @@ func NewRecoverController(cache *gocache.Cache, loggers chaoslogger.Loggers) *RC
 	}
 }
 
-// CalcExample godoc
+// RecoverActionAlertmanagerWebHook godoc
 // @Summary recover from failures
 // @Description Alertmanager webhook to recover from failures
 // @Tags Recover
 // @Accept json
 // @Produce json
-// @Param requestPayload body requestPayload true "Create request payload that contains the recovery details"
+// @Param RequestPayload body RequestPayload true "Create request payload that contains the recovery details"
 // @Success 200 {object} response.RecoverResponsePayload
-// @Failure 400 {object} response.RecoverResponsePayload
+// @Failure 400 {string} http.Error
 // @Router /recover/alertmanager [post]
 func (rController *RController) RecoverActionAlertmanagerWebHook(w http.ResponseWriter, r *http.Request) {
 	recoverMessages := make([]*response.RecoverMessage, 0)
@@ -57,7 +57,7 @@ func (rController *RController) RecoverActionAlertmanagerWebHook(w http.Response
 		}
 	}
 
-	response.OkRecoverResponse(w, recoverMessages, rController.loggers)
+	response.RecoverResponse(w, recoverMessages, rController.loggers)
 }
 
 type RequestPayload struct {

@@ -52,21 +52,21 @@ func NewNetworkController(
 type action int
 
 const (
-	stop action = iota
+	recoverFailure action = iota
 	start
 	notImplemented
 )
 
 func (a action) String() string {
-	return [...]string{"stop", "start"}[a]
+	return [...]string{"recover", "start"}[a]
 }
 
 func toActionEnum(value string) (action, error) {
 	switch value {
 	case start.String():
 		return start, nil
-	case stop.String():
-		return stop, nil
+	case recoverFailure.String():
+		return recoverFailure, nil
 	}
 	return notImplemented, errors.New(fmt.Sprintf("The action {%s} is not supported", value))
 }
@@ -109,17 +109,17 @@ func newNetworkRequest(details *RequestPayload) *v1.NetworkRequest {
 	}
 }
 
-// CalcExample godoc
+// NetworkAction godoc
 // @Summary Inject network failures
 // @Description Start and stop network failures
 // @Tags Failure injections
 // @Accept json
 // @Produce json
-// @Param action query string true "Specify to perform a start or a stop for a network failure injection"
+// @Param action query string true "Specify to perform a start or recover for a network failure injection" Enums(start, recover)
 // @Param requestPayload body RequestPayload true "Specify the job name, device name, target and netem injection arguments"
 // @Success 200 {object} response.Payload
-// @Failure 400 {object} response.Payload
-// @Failure 500 {object} response.Payload
+// @Failure 400 {string} http.Error
+// @Failure 500 {string} http.Error
 // @Router /network [post]
 func (n *NController) NetworkAction(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -189,8 +189,9 @@ func (n *NController) performAction(
 ) (string, error) {
 	var statusResponse *v1.StatusResponse
 	var err error
+	connection := n.connectionPool[request.Target].connection
 
-	networkClient, err := n.connectionPool[request.Target].connection.GetNetworkClient()
+	networkClient, err := connection.GetNetworkClient()
 	if err != nil {
 		return "", errors.Wrap(err, fmt.Sprintf("Can not get network connection from target {%s}", request.Target))
 	}
@@ -198,8 +199,8 @@ func (n *NController) performAction(
 	switch action {
 	case start:
 		statusResponse, err = networkClient.Start(ctx, newNetworkRequest(request))
-	case stop:
-		statusResponse, err = networkClient.Stop(ctx, newNetworkRequest(request))
+	case recoverFailure:
+		statusResponse, err = networkClient.Recover(ctx, newNetworkRequest(request))
 	}
 
 	switch {
@@ -208,7 +209,7 @@ func (n *NController) performAction(
 	case statusResponse.Status != v1.StatusResponse_SUCCESS:
 		return "", errors.New(fmt.Sprintf("Failure response from target {%s}", request.Target))
 	default:
-		if err = n.updateCache(networkClient, request, action); err != nil {
+		if err = n.updateCache(connection, request, action); err != nil {
 			_ = level.Error(n.loggers.ErrLogger).Log("msg", fmt.Sprintf("Could not update cache for operation %s", action), "err", err)
 		}
 	}
@@ -216,7 +217,7 @@ func (n *NController) performAction(
 	return fmt.Sprintf("Response from target {%s}, {%s}, {%s}", request.Target, statusResponse.Message, statusResponse.Status), nil
 }
 
-func (n *NController) updateCache(networkClient v1.NetworkClient, request *RequestPayload, action action) error {
+func (n *NController) updateCache(connection network.Connection, request *RequestPayload, action action) error {
 	key := cache.Key{
 		Job:    request.Job,
 		Target: request.Target,
@@ -225,11 +226,15 @@ func (n *NController) updateCache(networkClient v1.NetworkClient, request *Reque
 	switch action {
 	case start:
 		recoveryFunc := func() (*v1.StatusResponse, error) {
-			return networkClient.Stop(context.Background(), newNetworkRequest(request))
+			networkClient, err := connection.GetNetworkClient()
+			if err != nil {
+				return nil, errors.New(fmt.Sprintf("Could not recover network failure for job {%s} and target {%s}", request.Job, request.Target))
+			}
+			return networkClient.Recover(context.Background(), &v1.NetworkRequest{Device: request.Device})
 		}
 		n.cache.Set(key, recoveryFunc)
 		return nil
-	case stop:
+	case recoverFailure:
 		n.cache.Delete(key)
 		return nil
 	default:
