@@ -61,6 +61,8 @@ func setBotRouters(router *mux.Router, r *APIRouter) {
 
 func setRecoverRouter(router *mux.Router, r *APIRouter) {
 	rController := recover.NewRecoverController(r.Cache, r.loggers)
+	router.HandleFunc("/recover", rController.RecoverAction).
+		Methods("POST")
 	router.HandleFunc("/recover/alertmanager", rController.RecoverActionAlertmanagerWebHook).
 		Methods("POST")
 }

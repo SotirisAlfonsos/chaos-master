@@ -66,7 +66,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	recoverAll()
+	recoverTarget("127.0.0.1:8081")
 
 	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Kill container ------------")
 	status = dockerFailure("zookeeper", "kill")
@@ -82,7 +82,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	recoverAll()
+	recoverAlertmanagerAll()
 
 	//_ = level.Info(loggers.OutLogger).Log("msg", "------------ Kill server ------------")
 	//serverFailure()
@@ -222,16 +222,28 @@ func dockerAction(action string, request *docker.RequestPayload) (int, error) {
 	return resp.StatusCode, nil
 }
 
-func recoverAll() {
-	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Recover all ------------")
+func recoverTarget(target string) {
+	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Recover target ------------")
+
+	request := &recover.Options{RecoverTarget: target}
+
+	err := recoverAllOK(request)
+	if err != nil {
+		_ = level.Error(loggers.ErrLogger).Log("err", err)
+		os.Exit(1)
+	}
+}
+
+func recoverAlertmanagerAll() {
+	_ = level.Info(loggers.OutLogger).Log("msg", "------------ Recover alertmanager all ------------")
 
 	request := &recover.RequestPayload{
 		Alerts: []*recover.Alert{
-			{Status: "firing", Labels: recover.Labels{RecoverAll: true}},
+			{Status: "firing", Labels: recover.Options{RecoverAll: true}},
 		},
 	}
 
-	err := recoverAllOK(request)
+	err := recoverAlertmanagerAllOK(request)
 	if err != nil {
 		_ = level.Error(loggers.ErrLogger).Log("err", err)
 		os.Exit(1)
@@ -291,10 +303,29 @@ func serverAction(action string, request *server.RequestPayload) error {
 	return nil
 }
 
-func recoverAllOK(request *recover.RequestPayload) error {
-	_ = level.Info(loggers.OutLogger).Log("msg", "Recovering all failures")
+func recoverAlertmanagerAllOK(request *recover.RequestPayload) error {
+	_ = level.Info(loggers.OutLogger).Log("msg", "Recovering alertmanager all failures")
 
 	url := "http://127.0.0.1:8090/chaos/api/v1/recover/alertmanager"
+	requestBody, _ := json.Marshal(request)
+
+	resp, err := http.Post(url, "application/json", bytes.NewReader(requestBody))
+	if err != nil {
+		return fmt.Errorf(err.Error())
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to recover failures")
+	}
+
+	return nil
+}
+
+func recoverAllOK(request *recover.Options) error {
+	_ = level.Info(loggers.OutLogger).Log("msg", "Recovering all failures")
+
+	url := "http://127.0.0.1:8090/chaos/api/v1/recover"
 	requestBody, _ := json.Marshal(request)
 
 	resp, err := http.Post(url, "application/json", bytes.NewReader(requestBody))
