@@ -6,14 +6,15 @@
 [![codecov.io](https://codecov.io/github/SotirisAlfonsos/chaos-master/coverage.svg?branch=master)](https://codecov.io/github/SotirisAlfonsos/chaos-master?branch=master)
 
 The master provides an api to send fault injections to the [chaos bots](https://github.com/SotirisAlfonsos/chaos-bot)
-#### Chaos in practice
+#### [Chaos in practice](https://principlesofchaos.org/)
 1. Start by defining a ‘steady state’.
 2. Hypothesize that this steady state will continue in both the control group and the experimental group.
 3. <b>Inject failures that reflect real world events.</b>
-4. <i>Try to disprove the hypothesis by looking for a difference in steady state between the control group and the experimental group.</i>
-5. <b>Recover fast to the ‘steady state’.</b>
+4. <i>Try to disprove the hypothesis by looking for a difference in steady state between the control group and the experimental group.</i>  
 
-More info on https://principlesofchaos.org/
+At this point we should add one more stage
+
+5. <b>Recover fast to the ‘steady state’.</b>
 
 The master and bots focus on two of the stages of chaos, stages <b>3</b> and <b>5</b>
 
