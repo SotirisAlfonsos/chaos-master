@@ -5,7 +5,7 @@
 [![codebeat badge](https://codebeat.co/badges/ab1778ae-60c1-4b7d-aff6-a8f1eabbd2d5)](https://codebeat.co/projects/github-com-sotirisalfonsos-chaos-master-master)
 [![codecov.io](https://codecov.io/github/SotirisAlfonsos/chaos-master/coverage.svg?branch=master)](https://codecov.io/github/SotirisAlfonsos/chaos-master?branch=master)
 
-The master provides an api to send fault injections to the [chaos bots](https://github.com/SotirisAlfonsos/chaos-bot)
+The master provides an api to send fault injections to the [chaos bots](https://github.com/SotirisAlfonsos/chaos-bot), together with an automatic failure recovery mechanism
 #### [Chaos in practice](https://principlesofchaos.org/)
 1. Start by defining a ‘steady state’.
 2. Hypothesize that this steady state will continue in both the control group and the experimental group.
@@ -16,7 +16,7 @@ At this point we should add one more stage
 
 5. <b>Recover fast to the ‘steady state’.</b>
 
-The master and bots focus on two of the stages of chaos, stages <b>3</b> and <b>5</b>
+The master and bots focus on two of the stages of chaos, <b>Injection of failures</b> and <b>recovery to a steady state</b>
 
 ----
 
