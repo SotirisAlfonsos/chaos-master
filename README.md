@@ -6,9 +6,6 @@
 [![codecov.io](https://codecov.io/github/SotirisAlfonsos/chaos-master/coverage.svg?branch=master)](https://codecov.io/github/SotirisAlfonsos/chaos-master?branch=master)
 
 The master provides an api to send fault injections to the [chaos bots](https://github.com/SotirisAlfonsos/chaos-bot)
-
-----
-
 #### Chaos in practice
 1. Start by defining a ‘steady state’.
 2. Hypothesize that this steady state will continue in both the control group and the experimental group.
@@ -18,13 +15,22 @@ The master provides an api to send fault injections to the [chaos bots](https://
 
 More info on https://principlesofchaos.org/
 
-The master and bots focus on points <b>3</b> and <b>5</b>
+The master and bots focus on two of the stages of chaos, stages <b>3</b> and <b>5</b>
 
-### API
-See the api specification after starting the master at `\<host\>/chaos/api/v1/swagger/index.html`
+----
 
 ## Starting Up
-Start the chaos master providing a <i>config.file</i> that contains the job definitions. See an example of the file in the <i>config/example</i> folder.
+
+#### Create your project flder and download the latest chaos master binary
+
+```bash
+wget https://github.com/SotirisAlfonsos/chaos-master/releases/download/v0.0.2/chaos-master-0.0.2.linux-amd64.tar.gz
+tar -xzf chaos-master-0.0.2.linux-amd64.tar.gz
+```
+
+#### Start the chaos master providing a `config.file` that contains the job definitions. 
+See examples of the file in the `config/example` folder.
+
 ```yml
 # Contain the configuration for the port and scheme of the api. 
 # The deafault values are port: 8080 and scheme: http
@@ -66,3 +72,6 @@ health_check:
   # If set to active the status of the healthcheck will be reported in application log (stderr)
   report: false
 ```
+
+### API
+See the api specification after starting the master at `\<host\>/chaos/api/v1/swagger/index.html`
