@@ -29,6 +29,10 @@ tar -xzf chaos-master-0.0.2.linux-amd64.tar.gz
 ```
 
 #### Start the chaos master providing a `config.file` that contains the job definitions. 
+
+```bash
+./chaos-master --config.file=path/to/config.yml
+```
 See examples of the file in the `config/example` folder.
 
 ```yml
