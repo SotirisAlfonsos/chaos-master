@@ -83,17 +83,17 @@ See the api specification after starting the master at `<host>/chaos/api/v1/swag
 
 ## Chaos in practice
 1. Define the scope of your experiments. Failure types are scoped to specific targets and components. 
-> For the example config above   
-> the `docker` failure is scoped to the `nginx` containers in the targets `'host1:8081', 'host2:8081'`  
-> the `network` failure is scoped to targets `'host1:8081', 'host3:8081'`
+   - For the example config above   
+      the `docker` failure is scoped to the `nginx` containers in the targets `'host1:8081', 'host2:8081'`  
+      the `network` failure is scoped to targets `'host1:8081', 'host3:8081'`
 2. Start a [chaos bots](https://github.com/SotirisAlfonsos/chaos-bot) in each target specified in your jobs 
-> For the example config above  
-> we would have to start 3 bots. one on `host1`, one on `host2` and one on `host3`, all on port `8081` 
+   - For the example config above  
+      we would have to start 3 bots. one on `host1`, one on `host2` and one on `host3`, all on port `8081` 
 3. [Optional] Ensure that you have monitoring and alerting in place. Add the recover endpoint as a webhook in case of an alert, to quickly revert all running failures
 4. Make the first API call to inject a failure
-> For the example config above  
-> ```bash
-> curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/docker?action=kill" \
->  -H "Content-Type: application/json" \
->  -d '{"job": "docker failure injection", "containerName": "nginx", "target": "host1:8081"}'
-> ```
+   - For the example config above  
+      ```bash
+      curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/docker?action=kill" \
+      -H "Content-Type: application/json" \
+      -d '{"job": "docker failure injection", "containerName": "nginx", "target": "host1:8081"}'
+      ```
