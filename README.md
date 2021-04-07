@@ -5,7 +5,7 @@
 [![codebeat badge](https://codebeat.co/badges/ab1778ae-60c1-4b7d-aff6-a8f1eabbd2d5)](https://codebeat.co/projects/github-com-sotirisalfonsos-chaos-master-master)
 [![codecov.io](https://codecov.io/github/SotirisAlfonsos/chaos-master/coverage.svg?branch=master)](https://codecov.io/github/SotirisAlfonsos/chaos-master?branch=master)
 
-The master provides an api to send fault injections to the [chaos bots](https://github.com/SotirisAlfonsos/chaos-bot), together with an automatic failure recovery mechanism
+The master provides an api to orchestrate fault injections to the [chaos bots](https://github.com/SotirisAlfonsos/chaos-bot). Using the chaos API you have access to a number of possible fault injection and to an automatic failure recovery mechanism
 #### [Chaos in practice](https://principlesofchaos.org/)
 1. Start by defining a ‘steady state’.
 2. Hypothesize that this steady state will continue in both the control group and the experimental group.
@@ -53,10 +53,10 @@ jobs:
     # The name of the target component. Only applicable to Docker and Service failure types
     component_name: "nginx"
     # The list of targets for which is this failure can be applied
-    targets: ['127.0.0.1:8083', '127.0.0.1:8081']
+    targets: ['host1:8081', 'host2:8081']
   - job_name: "network injection"
     type: "Network"
-    targets: ['127.0.0.1:8081']
+    targets: ['host1:8081', 'host3:8081']
 
 # Contains the tls configuration for the communication with the bots. 
 # If not specified will default to http
@@ -78,5 +78,22 @@ health_check:
   report: false
 ```
 
-### API
-See the api specification after starting the master at `\<host\>/chaos/api/v1/swagger/index.html`
+## API
+See the api specification after starting the master at `<host>/chaos/api/v1/swagger/index.html`
+
+## Chaos in practice
+1. Define the scope of your experiments. Failure types are scoped to specific targets and components. 
+> For the example config above   
+> the `docker` failure is scoped to the `nginx` containers in the targets `'host1:8081', 'host2:8081'`  
+> the `network` failure is scoped to targets `'host1:8081', 'host3:8081'`
+2. Start a [chaos bots](https://github.com/SotirisAlfonsos/chaos-bot) in each target specified in your jobs 
+> For the example config above  
+> we would have to start 3 bots. one on `host1`, one on `host2` and one on `host3`, all on port `8081` 
+3. [Optional] Ensure that you have monitoring and alerting in place. Add the recover endpoint as a webhook in case of an alert, to quickly revert all running failures
+4. Make the first API call to inject a failure
+> For the example config above  
+> ```bash
+> curl -ss -X POST "http://127.0.0.1:8090/chaos/api/v1/docker?action=kill" \
+>  -H "Content-Type: application/json" \
+>  -d '{"job": "docker failure injection", "containerName": "nginx", "target": "host1:8081"}'
+> ```
