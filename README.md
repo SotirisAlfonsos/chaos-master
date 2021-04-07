@@ -97,3 +97,26 @@ See the api specification after starting the master at `<host>/chaos/api/v1/swag
       -H "Content-Type: application/json" \
       -d '{"job": "docker failure injection", "containerName": "nginx", "target": "host1:8081"}'
       ```
+
+## Comparisons
+|                              | Chaos master  | Chaos mesh    | Chaos toolkit | Gremlin  |
+|:------------------------     | :-----------: |:-------------:| :------------:|:--------:|
+|Run experiments as API calls  | x             |               |               | x        |
+|Run experiments as json       |               | x             |  x            |          |
+|Automatic recovery            | x             |               |  x            |          |
+|Steady state definition       |               |               |  x            |          |
+|Status checks                 |               |               |  x            | x        |
+|Plugable failures             |               |               |  x            |          |
+|Kubernetes failures           |               | x             |               | x        |
+|Container failures            | x             | x             |               | x        |
+|Service failures              | x             |               |               |          |
+|Server failures               | x             |               |               | x        |
+|netem chaos                   | x             | x             |               | x        |
+|CPU burn                      | x             | x             |               | x        |
+|IO chaos                      |               | x             |               | x        |
+|Memory burn                   |               | x             |               | x        |
+|Kernel chaos                  |               | x             |               |          |
+|dns chaos                     |               | x             |               | x        |
+|Experiment results            |               |               |  x            |          |
+|Open source                   | x             | x             |  x            |          |
+|Free                          | x             | x             |  x            |          |
